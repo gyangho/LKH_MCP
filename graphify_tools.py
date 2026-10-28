@@ -85,7 +85,15 @@ def _safe_text(value: str, label: str, *, max_length: int = 250) -> str:
 def _run_graphify(project: str, args: list[str], *, timeout: int) -> dict[str, Any]:
     root, graph = _get_project(project)
     binary = _graphify_binary()
-    env = os.environ.copy()
+    # Keep Oracle credentials, OAuth tokens and unrelated secrets out of the child.
+    # Graphify needs only basic Windows/Python process and user-cache variables.
+    safe_env_keys = {
+        "PATH", "PATHEXT", "SYSTEMROOT", "WINDIR", "TEMP", "TMP",
+        "TMPDIR", "USERPROFILE", "HOME", "HOMEDRIVE", "HOMEPATH",
+        "APPDATA", "LOCALAPPDATA", "PROGRAMDATA", "LANG", "LC_ALL",
+        "PYTHONIOENCODING",
+    }
+    env = {k: v for k, v in os.environ.items() if k.upper() in safe_env_keys}
     env["GRAPHIFY_BACKEND"] = "none"
     env["GRAPHIFY_QUERY_LOG_DISABLE"] = "1"
     env["GRAPHIFY_NO_TIPS"] = "1"
