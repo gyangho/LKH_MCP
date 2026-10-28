@@ -65,6 +65,18 @@ class TestGraphifyTools(unittest.TestCase):
                 self.tools["graphify_path"]("ITAM", "Login", "Collector")
                 self.assertEqual(run.call_args.args[0][1:], ["path", "Login", "Collector"])
 
+    def test_sensitive_environment_not_inherited(self):
+        with patch.dict(os.environ, {"ORACLE_PASSWORD": "example-secret", "OPENAI_API_KEY": "example-api-key"}):
+            with patch.object(graphify_tools, "_graphify_binary", return_value="graphify"):
+                with patch.object(graphify_tools.subprocess, "run") as run:
+                    run.return_value.returncode = 0
+                    run.return_value.stdout = "ok"
+                    run.return_value.stderr = ""
+                    self.tools["graphify_query"]("ITAM", "collector")
+                    child_env = run.call_args.kwargs["env"]
+                    self.assertNotIn("ORACLE_PASSWORD", child_env)
+                    self.assertNotIn("OPENAI_API_KEY", child_env)
+
     def test_update_refused_by_default(self):
         with self.assertRaises(PermissionError):
             self.tools["graphify_update"]("ITAM")
