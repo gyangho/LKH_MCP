@@ -8,10 +8,11 @@ import os
 from mcp.server import MCPServer
 from oracle_db import test_select, list_tables, preview_table
 from uiux_tools import register_uiux_tools
+from graphify_tools import register_graphify_tools
 
 mcp = MCPServer(
     "Oracle Local Read-Only MCP",
-    instructions="Read-only tools for the locally configured Oracle database. Never use for arbitrary SQL execution."
+    instructions="Safe Oracle SELECT tools, UI UX guidance, and allowlisted Graphify graph queries. No arbitrary SQL or shell execution."
 )
 
 
@@ -32,7 +33,9 @@ def oracle_preview_table(table_name: str, limit: int = 5) -> dict:
     """Preview up to 20 rows of an allowlisted TABLE or OWNER.TABLE accessible by this DB user."""
     return preview_table(table_name, limit)
 
+
 register_uiux_tools(mcp)
+register_graphify_tools(mcp)
 
 if __name__ == "__main__":
     mcp.run(
