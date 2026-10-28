@@ -42,7 +42,16 @@ def validate_table_reference(name: str) -> str:
 
 
 def get_allowed_tables() -> set[str]:
-    raw = os.getenv("ORACLE_ALLOWED_TABLES", "")
+    """Return explicit allowlist, or {"*"} for all visible Oracle tables.
+
+    Wildcard is intentionally opt-in and must appear alone. Database permissions
+    are still enforced by Oracle; never expose this mode without MCP auth.
+    """
+    raw = os.getenv("ORACLE_ALLOWED_TABLES", "").strip()
+    if raw == "*":
+        return {"*"}
+    if "*" in raw:
+        raise ValueError("ORACLE_ALLOWED_TABLES: '*' must be used alone")
     return {validate_table_reference(item.strip()) for item in raw.split(",") if item.strip()}
 
 
@@ -56,7 +65,10 @@ def _driver():
         if not _client_initialized:
             client_dir = os.getenv("ORACLE_CLIENT_LIB_DIR", "").strip()
             if client_dir:
-                _oracledb.init_oracle_client(lib_dir=client_dir)
+                path = Path(client_dir).expanduser()
+                if not path.is_absolute():
+                    path = Path(__file__).resolve().parent / path
+                _oracledb.init_oracle_client(lib_dir=str(path.resolve()))
             _client_initialized = True
         return _oracledb
 
@@ -118,32 +130,40 @@ def test_select() -> dict:
 
 
 def list_tables(limit: int = 30) -> dict:
-    """List only explicit allowlist entries accessible by the configured user."""
+    """List explicitly allowlisted tables or all ALL_TABLES in '*' mode."""
     limit = max(1, min(int(limit), 100))
     allowed = sorted(get_allowed_tables())
     if not allowed:
         return {"tables": [], "count": 0, "notice": "Set ORACLE_ALLOWED_TABLES to enable table discovery"}
     with connection() as conn:
         with conn.cursor() as cur:
-            cur.execute("SELECT USER FROM DUAL")
-            username = cur.fetchone()[0]
-            visible = []
-            for name in allowed[:100]:
-                owner, table = name.split(".") if "." in name else (username, name)
-                cur.execute("SELECT COUNT(*) FROM ALL_TABLES WHERE OWNER=:owner AND TABLE_NAME=:name",
-                            owner=owner, name=table)
-                if cur.fetchone()[0] == 1:
-                    visible.append(f"{owner}.{table}")
-                if len(visible) >= limit:
-                    break
-    return {"tables": visible, "count": len(visible), "max_rows": limit}
-
+            if allowed == ["*"]:
+                # 11g-compatible pagination; only fetch up to the requested cap.
+                cur.execute(
+                    "SELECT OWNER, TABLE_NAME FROM ("
+                    "SELECT OWNER, TABLE_NAME FROM ALL_TABLES ORDER BY OWNER, TABLE_NAME"
+                    ") WHERE ROWNUM <= :lim", lim=limit
+                )
+                visible = [f"{owner}.{table}" for owner, table in cur.fetchall()]
+            else:
+                cur.execute("SELECT USER FROM DUAL")
+                username = cur.fetchone()[0]
+                visible = []
+                for name in allowed[:100]:
+                    owner, table = name.split(".") if "." in name else (username, name)
+                    cur.execute("SELECT COUNT(*) FROM ALL_TABLES WHERE OWNER=:owner AND TABLE_NAME=:name",
+                                owner=owner, name=table)
+                    if cur.fetchone()[0] == 1:
+                        visible.append(f"{owner}.{table}")
+                    if len(visible) >= limit:
+                        break
+    return {"tables": visible, "count": len(visible), "max_rows": limit, "all_visible_mode": allowed == ["*"]}
 
 def preview_table(table_name: str, limit: int = 5) -> dict:
     """Preview only an explicit allowlist table accessible to the DB account."""
     ref = validate_table_reference(table_name)
     allowed = get_allowed_tables()
-    if ref not in allowed:
+    if "*" not in allowed and ref not in allowed:
         raise PermissionError("Table is not allowlisted in ORACLE_ALLOWED_TABLES")
     limit = max(1, min(int(limit), 20))
     with connection() as conn:

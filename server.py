@@ -7,6 +7,7 @@ MCP-compatible authentication and authorization are configured.
 import os
 from mcp.server import MCPServer
 from oracle_db import test_select, list_tables, preview_table
+from uiux_tools import register_uiux_tools
 
 mcp = MCPServer(
     "Oracle Local Read-Only MCP",
@@ -31,6 +32,7 @@ def oracle_preview_table(table_name: str, limit: int = 5) -> dict:
     """Preview up to 20 rows of an allowlisted TABLE or OWNER.TABLE accessible by this DB user."""
     return preview_table(table_name, limit)
 
+register_uiux_tools(mcp)
 
 if __name__ == "__main__":
     mcp.run(
