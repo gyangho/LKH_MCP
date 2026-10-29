@@ -67,7 +67,7 @@ def _execute(payload: dict) -> dict:
         try:
             finished = subprocess.run(cmd, cwd=str(root), input=prompt, capture_output=True,
                                       text=True, encoding="utf-8", errors="replace",
-                                      timeout=180, env=env, stdin=subprocess.PIPE)
+                                      timeout=180, env=env)
         except subprocess.TimeoutExpired:
             raise RuntimeError("Codex runtime exceeded 180 seconds")
         if finished.returncode != 0:
