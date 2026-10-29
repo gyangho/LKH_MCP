@@ -1,5 +1,59 @@
 # Docker Compose · SQLite · Codex 승인 운영 가이드
 
+## MCP 8000 / Admin 8001 포트 분리
+
+LKH MCP Python 서버는 Docker 내부 포트 8000 한 개만 사용합니다.
+Nginx gateway만 호스트 포트를 게시하며 URL 경로를 제한합니다.
+
+- 192.0.1.22:8000/mcp: MCP Portal의 기존 Upstream (변경 없음)
+- 192.0.1.22:8000/admin: 차단 (HTTP 404)
+- 127.0.0.1:8001/admin: Cloudflare Access를 거친 관리자 화면
+- 127.0.0.1:8001/admin/config: SQLite 설정
+- 127.0.0.1:8001/admin/codex: Codex 승인
+- 127.0.0.1:8001/mcp: 차단 (HTTP 404)
+- /healthz: 백엔드 Docker 컨테이너 내부 헬스체크만 허용
+
+Windows에서 cloudflared가 실행 중인 경우 Cloudflare Tunnel의 관리자
+Published application 서비스 URL은 http://127.0.0.1:8001 로 변경하세요.
+Cloudflare Access 인증 정책 및 브라우저 URL
+https://mcp.gyangho.com/admin 은 변경하지 않습니다.
+Service URL 뒤에 /admin을 추가하지 마세요.
+
+192.0.1.22는 반드시 Windows 호스트의 실제 NIC에 할당된 IP여야 합니다.
+CIDR Route만 등록했다고 해당 IP로 바인딩할 수 있는 것은 아닙니다.
+PowerShell에서 다음을 확인하세요.
+
+    Get-NetIPAddress -IPAddress 192.0.1.22
+
+만약 이 주소가 호스트에 할당되어 있지 않다면, compose.yaml의
+gateway 8000 포트 바인딩을 실제 호스트 IP로 수정하고 Portal의
+CIDR 라우팅도 그 IP에 연결되도록 조정해야 합니다.
+0.0.0.0에 게시하면 모든 네트워크 인터페이스에 노출되므로,
+Portal 출발지로 Windows 방화벽 접근 제한을 반드시 설정하세요.
+
+기존 Windows MCP Python/EXE가 8000번 포트를 점유한다면
+Docker 시작 전에 종료하세요. 포트 충돌로 gateway가 시작되지 않습니다.
+
+Windows PowerShell 검증 예시:
+
+    docker compose ps
+    docker compose logs --tail=100 gateway
+    curl.exe -i http://192.0.1.22:8000/admin
+    curl.exe -i http://127.0.0.1:8001/mcp
+    curl.exe -i http://127.0.0.1:8001/admin
+
+첫 두 HTTP 테스트는 404여야 합니다.
+마지막 localhost 요청은 Cloudflare Access JWT를 전달하지 않기 때문에
+403 Access denied가 정상입니다. 503 Admin authentication not configured라면
+secrets/bootstrap.json 및 마운트 상태를 확인하세요.
+MCP 자체의 /mcp는 브라우저 GET 응답 코드만으로 연결 성공 여부를
+판정하지 마세요.
+
+관리자 포트를 외부 NIC에 게시하지 말고, 백엔드 8000 포트는
+호스트에 직접 게시하지 마세요. 게이트웨이의 MCP 포트에도
+별도의 인증 및 네트워크 접근 통제가 필요합니다.
+
+
 ## 환경변수 최소화
 
 기본 Compose에서 필요한 환경변수는 MCP_HOST=0.0.0.0 하나입니다.
@@ -13,7 +67,7 @@ SQLite 저장 설정:
 - Oracle: HOST, PORT, SERVICE/SID, DSN, USER, ALLOWED_TABLES, CLIENT_LIB_DIR
 
 비밀값은 SQLite에 저장하지 않습니다. secrets/bootstrap.json
-(Docker secret /run/secrets/mcp_bootstrap.json)은 아래 키만 사용합니다.
+(Docker secret /run/secrets/mcp_bootstrap)은 아래 키만 사용합니다.
 ORACLE_PASSWORD, ADMIN_CF_TEAM, ADMIN_CF_AUD, ADMIN_ALLOWED_EMAILS,
 ADMIN_PUBLIC_ORIGIN.
 
@@ -36,12 +90,11 @@ Windows PowerShell에서 다음을 실행합니다.
 
 bootstrap.json은 gitignore에 제외되어 있습니다. 예제 값을 실제
 Cloudflare Access team, AUD, 관리자 이메일 및 Oracle 비밀번호로
-교체해야 합니다. Cloudflare Tunnel은 기존의 mcp.gyangho.com
-주소와 http://127.0.0.1:8000 origin을 유지합니다.
+교체해야 합니다. Cloudflare Tunnel 관리자 origin은 Windows 기준 http://127.0.0.1:8001 입니다.
 
 서비스 경로:
 - /mcp 기존 MCP
-- /healthz 공개 최소 생존 상태
+- /healthz Docker 컨테이너 내부 헬스체크
 - /admin 모니터링
 - /admin/config SQLite 설정 페이지
 - /admin/codex Codex 승인 페이지

@@ -294,3 +294,15 @@ The tray is visible only in an interactive logged-in Windows session;
 it does not appear in headless Windows services or logged-off sessions.
 Both EXE and tray icons come from the approved pixel-art pig in branding/pig-terminal.png; Pillow converts that artwork into PNG and ICO without drawing a different logo.
 Local secrets, build artifacts, runtime logs and generated icons are ignored.
+
+
+## Docker MCP/Admin port isolation
+
+Docker Compose uses a single backend and an unprivileged Nginx gateway.
+192.0.1.22:8000 exposes only the MCP endpoint. 127.0.0.1:8001
+exposes only the Cloudflare Access-protected admin endpoints.
+The MCP Portal Upstream stays http://192.0.1.22:8000/mcp.
+When cloudflared runs on Windows, its admin origin becomes
+http://127.0.0.1:8001. The host must actually own 192.0.1.22;
+a CIDR route alone does not assign this address.
+Deployment details: docs/DOCKER_SQLITE_CODEX.md.

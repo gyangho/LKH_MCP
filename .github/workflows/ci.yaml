@@ -21,3 +21,64 @@ jobs:
         run: python -m compileall -q server.py src worker tests
       - name: Unit and isolated Git tests
         run: python -m unittest discover -s tests -t . -p "test_*.py" -v
+
+  gateway:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate Docker Compose files
+        run: |
+          mkdir -p secrets
+          printf '{"ADMIN_CF_TEAM":"ci","ADMIN_CF_AUD":"ci","ADMIN_ALLOWED_EMAILS":"ci@example.test"}\n' > secrets/bootstrap.json
+          printf 'ci-only-placeholder-0123456789abcdefgh\n' > secrets/codex_worker_token
+          docker compose -f compose.yaml config --quiet
+          docker compose -f compose.yaml -f compose.codex.yaml --profile codex config --quiet
+      - name: Validate Nginx syntax and non-root permissions
+        run: |
+          docker run --rm --user 101:101 --read-only --cap-drop ALL \
+            --tmpfs /tmp:rw,nosuid,size=32m \
+            --add-host mcp:127.0.0.1 \
+            -v "$PWD/nginx/nginx.conf:/etc/nginx/nginx.conf:ro" \
+            nginx:stable-alpine nginx -t
+      - name: Smoke-test gateway routing
+        run: |
+          set -euo pipefail
+          docker network create lkh-gateway-ci
+          cleanup() { docker rm -f lkh-gw-ci mcp || true; docker network rm lkh-gateway-ci || true; }
+          trap cleanup EXIT
+          cat > /tmp/lkh-mcp-test-server.py <<'PY'
+          from http.server import BaseHTTPRequestHandler, HTTPServer
+          class Handler(BaseHTTPRequestHandler):
+              def do_GET(self):
+                  self.send_response(200)
+                  self.end_headers()
+                  self.wfile.write(self.path.encode())
+              def do_POST(self):
+                  self.do_GET()
+          HTTPServer(("0.0.0.0", 8000), Handler).serve_forever()
+          PY
+          docker run -d --rm --name mcp --network lkh-gateway-ci \
+            -v /tmp/lkh-mcp-test-server.py:/tmp/mock.py:ro python:3.12-alpine python /tmp/mock.py
+          docker run -d --rm --name lkh-gw-ci --network lkh-gateway-ci \
+            --user 101:101 --read-only --cap-drop ALL --tmpfs /tmp:rw,nosuid,size=32m \
+            -p 127.0.0.1:18000:8000 -p 127.0.0.1:18001:8001 \
+            -v "$PWD/nginx/nginx.conf:/etc/nginx/nginx.conf:ro" nginx:stable-alpine
+          for i in $(seq 1 20); do
+            if curl -fsS http://127.0.0.1:18000/mcp >/dev/null; then break; fi
+            sleep 1
+          done
+          check() {
+            actual=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:$1$2")
+            test "$actual" = "$3" || { echo "HTTP $actual for $1$2; expected $3"; exit 1; }
+          }
+          check 18000 /mcp 200
+          check 18000 /mcp/ 200
+          check 18000 /admin 404
+          check 18000 /admin/config 404
+          check 18000 /healthz 404
+          check 18001 /admin 200
+          check 18001 /admin/api/config 200
+          check 18001 /mcp 404
+          check 18001 /administer 404
