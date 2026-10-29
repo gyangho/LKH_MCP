@@ -8,6 +8,7 @@ The upstream repo lives in vendor/ui-ux-pro-max-skill (no automatic download).
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -50,7 +51,8 @@ def _execute(*args: str) -> dict[str, Any]:
             "vendor/ui-ux-pro-max-skill/src/ui-ux-pro-max/scripts/search.py 경로를 확인하세요."
         )
     # Do not accept a command string or use shell=True; never persist files.
-    cmd = [sys.executable, str(SCRIPT), *args, "--json"]
+    interpreter = os.getenv("UIUX_PYTHON_EXECUTABLE") or sys.executable
+    cmd = [interpreter, str(SCRIPT), *args, "--json"]
     try:
         result = subprocess.run(
             cmd,
