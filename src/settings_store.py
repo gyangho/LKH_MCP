@@ -40,7 +40,7 @@ _BOOL_FIELDS = {key for key, item in FIELDS.items() if item[2] == "bool"}
 
 
 def db_path() -> Path:
-    return Path(os.environ.get("MCP_DB_PATH", "data/mcp.sqlite3")).expanduser().resolve()
+    return Path(os.environ.get("MCP_DB_PATH") or "data/mcp.sqlite3").expanduser().resolve()
 
 
 def _connect() -> sqlite3.Connection:
@@ -102,7 +102,7 @@ def initialize() -> None:
         # Backwards compatibility: one-time import of existing local .env settings.
         from dotenv import load_dotenv
         load_dotenv(Path(__file__).resolve().parent.parent / ".env", override=False)
-        bootstrap = Path(os.environ.get("MCP_BOOTSTRAP_FILE", "/run/secrets/mcp_bootstrap.json"))
+        bootstrap = Path(os.environ.get("MCP_BOOTSTRAP_FILE") or "/run/secrets/mcp_bootstrap.json")
         if bootstrap.is_file():
             data = json.loads(bootstrap.read_text(encoding="utf-8"))
             if not isinstance(data, dict) or set(data) - SECRETS:
