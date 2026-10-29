@@ -71,10 +71,9 @@ class AdminTests(unittest.TestCase):
                                          json.dumps({"key": "GIT_ALLOW_PUSH", "enabled": True}).encode())
                     self.assertEqual(result.status_code, 200)
                     save.assert_called_once_with("GIT_ALLOW_PUSH", True, "admin@example.com")
-                    result = self.invoke("/admin/api/flags", "POST", headers,
-                                         json.dumps({"key": "GIT_ALLOW_PUSH", "enabled": "yes"}).encode())
-                    # Real change_flag validation rejects strings; our mock skips it.
-                    self.assertEqual(result.status_code, 200)
+                result = self.invoke("/admin/api/flags", "POST", headers,
+                                     json.dumps({"key": "GIT_ALLOW_PUSH", "enabled": "yes"}).encode())
+                self.assertEqual(result.status_code, 400)
 
 
 if __name__ == "__main__":
