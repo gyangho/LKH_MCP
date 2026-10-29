@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="dark"><title>LKH MCP · Codex 승인</title><style>
+:root{color-scheme:dark;font-family:"Segoe UI","Malgun Gothic",system-ui;background:#060e1d;color:#e9f2ff;--line:#293a51;--muted:#9aafc6;--green:#80efba}*{box-sizing:border-box}body{margin:0;min-height:100vh;background:radial-gradient(900px 500px at 100% 0%,#142b44,transparent 72%),#060e1d}
+header{border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;gap:20px;padding:25px 32px}h1{margin:7px 0;font-size:25px}h2{font-size:15px;margin:0 0 8px}p{color:var(--muted);font-size:13px;line-height:1.7;margin:8px 0}.label{color:var(--green);letter-spacing:1.4px;font-size:11px;font-weight:700}a{color:#9fd6fa;text-decoration:none}a:hover{text-decoration:underline}main{max-width:1120px;margin:auto;padding:28px 22px 50px}.hint{padding:16px;border:1px solid #315345;background:#112a2a;border-radius:11px;color:#a5dcca;line-height:1.7;font-size:12px;margin-bottom:20px}.button{border:1px solid #416587;background:#193452;color:#edf6ff;padding:10px 13px;border-radius:9px;font:inherit;font-size:12px;cursor:pointer}.button:hover{border-color:#9dbff5}.button:focus-visible{outline:3px solid #9dc8ff;outline-offset:2px}.button.danger{background:#40202e;border-color:#9d425a}.button:disabled{opacity:.4;cursor:not-allowed}.cards{display:grid;gap:14px;margin-top:17px}.card{border:1px solid var(--line);background:#111e31;border-radius:13px;padding:19px}.head{display:flex;align-items:center;justify-content:space-between;gap:12px}.state{display:inline-block;background:#143e36;color:#8eeac0;border-radius:7px;padding:6px 9px;font-size:11px;font-weight:700}.meta{font-size:12px;color:var(--muted);margin-top:10px;overflow-wrap:anywhere}.actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:15px}.report{margin-top:16px}.report pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#07101f;color:#ccd9ed;border:1px solid #32405c;border-radius:8px;padding:14px;max-height:290px;overflow-y:auto;font:11px/1.5 Consolas,monospace}.empty{border:1px dashed #42536d;border-radius:13px;padding:30px;color:#9db2ca;text-align:center;font-size:13px}.error{color:#fbb7c4;font-size:12px;margin-top:10px}.status{color:#8bdeb5;margin-top:12px;font-size:12px}footer{color:#6f859d;font-size:11px;margin-top:25px}@media(max-width:600px){header{flex-direction:column;align-items:flex-start;padding:18px}.head{align-items:flex-start;flex-direction:column}}
+</style></head><body><header><div><div class="label">LKH MCP · SECURE DELEGATION</div><h1>Codex 디버깅 승인</h1><p>주요 기능 개발은 ChatGPT가 담당하고, 오류 분석·최소 수정만 Codex에 위임합니다.</p></div><nav><a href="/admin">모니터링</a>　 <a href="/admin/config">환경 설정</a></nav></header><main>
+<div class="hint"><strong>2단계 승인 방식</strong>　오류 분석 요청 → 실행 승인 → 결과·diff 확인 → 별도 패치 적용 승인. Codex는 Git commit/push 권한이 없고, 실제 Git 반영은 ChatGPT와 사용자의 별도 승인 절차를 따릅니다. 승인 토큰은 10분 후 만료됩니다.</div>
+<button class="button" id="reload" type="button">↻ 작업 새로고침</button><div id="status" class="status" role="status" aria-live="polite"></div><section id="jobs" class="cards"><div class="empty">요청을 조회 중입니다.</div></section>
+<footer>Cloudflare Access 관리자 JWT 검증 · 선택된 코드만 격리된 Docker Codex worker로 전송</footer></main>
+<script>
+(()=>{'use strict';const jobs=document.getElementById('jobs'),status=document.getElementById('status');
+function el(tag,cls,txt){const n=document.createElement(tag);if(cls)n.className=cls;if(txt!==undefined)n.textContent=String(txt);return n}
+async function approve(id,action){const label={approve_run:'Codex 분석 실행',approve_apply:'검토한 패치 적용',reject:'작업 거부'}[action];if(!confirm(label+'을 승인할까요?'))return;try{
+const r=await fetch('/admin/api/codex/decision',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','X-LKH-Admin-Action':'1'},body:JSON.stringify({task_id:id,action})});
+if(!r.ok)throw Error('승인 요청 오류: '+r.status);status.textContent=label+' 승인 처리 완료';load();}catch(e){status.textContent=e.message}}
+function actionButton(bar,id,text,code,danger){const b=el('button','button'+(danger?' danger':''),text);b.type='button';b.onclick=()=>approve(id,code);bar.append(b)}
+async function load(){try{const r=await fetch('/admin/api/codex/tasks',{credentials:'same-origin',cache:'no-store'});if(!r.ok)throw Error('작업 조회 실패 ('+r.status+')');const data=await r.json();jobs.replaceChildren();
+if(!data.tasks||!data.tasks.length){jobs.append(el('div','empty','대기 중인 디버깅 요청이 없습니다.'));return}
+for(const t of data.tasks){const card=el('article','card');const head=el('div','head');head.append(el('h2','',t.project+' · '+t.mode),el('span','state',t.state));card.append(head,el('div','meta','작업 ID: '+t.id),el('div','meta','관련 파일: '+t.files.join(', ')),el('div','meta','요청: '+t.created_at+' · 승인자: '+(t.approved_by||'미승인')));
+if(t.report){const s=el('section','report');s.append(el('h2','','오류 분석 결과'),el('pre','',t.report));card.append(s)}
+if(t.patch){const s=el('section','report');s.append(el('h2','','검토할 변경 사항'),el('pre','',t.patch));card.append(s)}
+if(t.error)card.append(el('p','error',t.error));
+const actions=el('div','actions');if(t.state==='pending'){actionButton(actions,t.id,'분석 실행 승인','approve_run',false);actionButton(actions,t.id,'거부','reject',true)}
+if(t.state==='completed'&&t.patch)actionButton(actions,t.id,'로컬 패치 적용 승인','approve_apply',false);
+card.append(actions);jobs.append(card)}
+}catch(e){status.textContent=e.message}}
+document.getElementById('reload').onclick=load;load();setInterval(()=>{if(!document.hidden)load()},10000);
+})();
+</script></body></html>
