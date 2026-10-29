@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 from version import VERSION
+import settings_store
 
 FLAGS = ("GIT_ALLOW_COMMIT", "GIT_ALLOW_PUSH", "GRAPHIFY_ALLOW_UPDATE")
 _FLAG_META = {
@@ -45,47 +46,25 @@ def _config_path() -> Path:
 
 
 def initialize_state() -> None:
-    """Read ONLY the three approved flags; do not evaluate arbitrary config."""
-    path = _config_path()
-    if not path.is_file():
-        return
-    obj = json.loads(path.read_text(encoding="utf-8"))
-    if (not isinstance(obj, dict) or set(obj) - set(FLAGS)
-            or any(type(v) is not bool for v in obj.values())):
-        raise ValueError("잘못된 MCP runtime-settings.json 내용입니다.")
-    for key, value in obj.items():
-        os.environ[key] = "true" if value else "false"
+    """Initialize persistent SQLite configuration before tool registration."""
+    settings_store.initialize()
 
 
 def flags_snapshot() -> list[dict[str, Any]]:
-    with _LOCK:
-        return [
-            {"key": key, "label": _FLAG_META[key][0], "description": _FLAG_META[key][1],
-             "enabled": os.environ.get(key, "false").lower() == "true"}
-            for key in FLAGS
-        ]
+    return [{"key": item["key"], "label": item["label"],
+             "description": item["description"], "enabled": item["value"]}
+            for item in settings_store.items() if item["type"] == "bool"]
 
 
 def change_flag(key: str, value: bool, actor: str) -> dict:
-    if key not in FLAGS or type(value) is not bool:
-        raise ValueError("허용된 토글 키와 boolean 값만 사용할 수 있습니다.")
-    with _LOCK:
-        data = {name: os.environ.get(name, "false").lower() == "true" for name in FLAGS}
-        data[key] = value
-        directory = state_dir()
-        directory.mkdir(parents=True, exist_ok=True)
-        output = _config_path()
-        staging = directory / f".runtime-{uuid.uuid4().hex}.tmp"
-        try:
-            with staging.open("x", encoding="utf-8") as file:
-                json.dump(data, file, ensure_ascii=False, indent=2)
-            os.chmod(staging, 0o600)
-            os.replace(staging, output)
-        finally:
-            staging.unlink(missing_ok=True)
-        os.environ[key] = "true" if value else "false"
-        _record("settings", "success", detail=f"{key}={'ON' if value else 'OFF'}", actor=actor)
-    return {"key": key, "enabled": value, "saved": True, "applies_immediately": True}
+    """Persist a known boolean with revision and audit tracking."""
+    if type(value) is not bool or key not in settings_store._BOOL_FIELDS:
+        raise ValueError("Only known boolean settings are allowed")
+    item = next(x for x in settings_store.items() if x["key"] == key)
+    result = settings_store.update(key, value, actor, item["revision"])
+    _record("settings", "success", detail=f"{key}={'ON' if value else 'OFF'}", actor=actor)
+    return {"key": key, "enabled": value, "saved": True, "revision": result["revision"],
+            "applies_immediately": True}
 
 
 def _record(tool: str, status: str, *, duration_ms: int = 0,

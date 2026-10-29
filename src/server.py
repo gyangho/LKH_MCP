@@ -4,6 +4,8 @@ Expose /mcp ONLY behind the existing Cloudflare MCP Portal/Access controls.
 Dashboard admin routes independently verify signed Cloudflare Access JWT.
 """
 import os
+import settings_store
+settings_store.initialize()
 from mcp.server import MCPServer
 from oracle_db import test_select, list_tables, preview_table
 from uiux_tools import register_uiux_tools

@@ -11,6 +11,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse, RedirectResponse
 
 from runtime_state import change_flag, flags_snapshot, telemetry
+import settings_store
 from version import VERSION
 
 
@@ -76,6 +77,7 @@ def _private(response):
 
 
 def register_routes(mcp: Any) -> None:
+    register_configuration_routes(mcp)
     @mcp.custom_route("/", methods=["GET"])
     async def home(request: Request):
         return RedirectResponse("/admin", status_code=307)
@@ -133,3 +135,51 @@ def register_routes(mcp: Any) -> None:
             return _private(_auth_response(exc))
         except (ValueError, TypeError, KeyError):
             return _private(JSONResponse({"error": "Invalid flag update"}, status_code=400))
+
+
+def register_configuration_routes(mcp: Any) -> None:
+    """Read and mutate only validated SQLite settings; require Access JWT."""
+    @mcp.custom_route("/admin/config", methods=["GET"])
+    async def config_page(request: Request):
+        try:
+            _verify_access(request)
+            base = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent.parent))
+            return _private(HTMLResponse((base / "web" / "config.html").read_text(encoding="utf-8")))
+        except (AdminNotConfigured, AdminUnauthorized) as exc:
+            return _private(_auth_response(exc))
+
+    @mcp.custom_route("/admin/api/config", methods=["GET"])
+    async def config_get(request: Request):
+        try:
+            actor = _verify_access(request)
+            return _private(JSONResponse({"viewer": actor, "settings": settings_store.items(),
+                                          "audit": settings_store.audit_events(20), "secrets_configured": {
+                                              "oracle": bool(os.environ.get("ORACLE_PASSWORD")),
+                                              "cloudflare_access": all(os.environ.get(k) for k in (
+                                                  "ADMIN_CF_TEAM", "ADMIN_CF_AUD", "ADMIN_ALLOWED_EMAILS"))
+                                          }}))
+        except (AdminNotConfigured, AdminUnauthorized) as exc:
+            return _private(_auth_response(exc))
+
+    @mcp.custom_route("/admin/api/config", methods=["POST"])
+    async def config_post(request: Request):
+        try:
+            actor = _verify_access(request)
+            expected_origin = os.environ.get("ADMIN_PUBLIC_ORIGIN", "").rstrip("/")
+            if (not expected_origin.startswith("https://") or
+                    request.headers.get("origin") != expected_origin or
+                    request.headers.get("x-lkh-admin-action") != "1" or
+                    request.headers.get("content-type", "").split(";")[0].strip() != "application/json"):
+                return _private(JSONResponse({"error": "Origin or CSRF check failed"}, status_code=403))
+            length = int(request.headers.get("content-length", "0"))
+            if length < 1 or length > 4096:
+                return _private(JSONResponse({"error": "Invalid content length"}, status_code=413))
+            data = await request.json()
+            if not isinstance(data, dict) or set(data) != {"key", "value", "revision"}:
+                raise ValueError("Only key, value and revision are allowed")
+            result = settings_store.update(data["key"], data["value"], actor, data["revision"])
+            return _private(JSONResponse(result))
+        except (AdminNotConfigured, AdminUnauthorized) as exc:
+            return _private(_auth_response(exc))
+        except (ValueError, KeyError, TypeError):
+            return _private(JSONResponse({"error": "Invalid or stale setting"}, status_code=400))
