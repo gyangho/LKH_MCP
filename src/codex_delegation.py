@@ -196,13 +196,14 @@ def run_approved(ident: str) -> dict:
         if item["state"] != "approved" or time.monotonic() > item["approval_deadline"]:
             raise PermissionError("유효한 관리자 실행 승인이 필요합니다.")
         # Keep the quota across restarts in the SQLite database.
+        quota = settings_store.get("CODEX_MAX_RUNS_PER_DAY")
         conn = settings_store._connect()
         acquired = False
         try:
             conn.execute("CREATE TABLE IF NOT EXISTS codex_runs (at INTEGER NOT NULL)")
             conn.execute("BEGIN IMMEDIATE")
             count = conn.execute("SELECT COUNT(*) FROM codex_runs WHERE at >= ?", (int(time.time()) - 86400,)).fetchone()[0]
-            if count >= settings_store.get("CODEX_MAX_RUNS_PER_DAY"):
+            if count >= quota:
                 conn.execute("ROLLBACK")
                 raise RuntimeError("일일 Codex 호출 제한에 도달했습니다.")
             if not _RUNNING.acquire(blocking=False):
