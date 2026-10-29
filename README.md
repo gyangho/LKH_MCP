@@ -160,3 +160,45 @@ Test the adapter without Oracle or installed Graphify:
 - `.env` has secrets; do not upload/share/commit it.
 - Nothing in this package can test or connect to the user's private Docker
   container from the ChatGPT runtime. Tests must run on the user's PC.
+
+## 7. GitHub editing + local Git workflow
+
+The ChatGPT GitHub plugin already edits hosted GitHub repositories. This
+optional LKH MCP adapter adds *local* Git status/diff and explicitly enabled
+push for previously committed changes. Do NOT add a GitHub PAT to this MCP.
+
+Local MCP tools: git_list_projects, git_status(project),
+git_diff(project, staged=false), git_push(project, expected_head).
+None can stage, commit, pull, reset, checkout, or run arbitrary shell commands.
+
+Append these settings to your existing .env (do not overwrite credentials):
+
+    GIT_ALLOWED_REPOS=ITAM=gyangho/ITAM;LKH_MCP=gyangho/LKH_MCP
+    GIT_EXECUTABLE=
+    GIT_ALLOW_PUSH=false
+
+Git project names map to the absolute directories already specified in
+GRAPHIFY_PROJECTS. The Git origin URL MUST match the configured GitHub repo.
+The Git executable is found on PATH or via GIT_EXECUTABLE (absolute path).
+
+Workflow:
+1. Locally: git status; git add -- <specific paths>; git diff --cached;
+   git commit -m 'Describe changes'; git push origin HEAD.
+2. In ChatGPT: use the already connected GitHub plugin to inspect the pushed
+   commit, edit GitHub files, and create/push new commits or pull requests.
+3. Locally on that SAME branch: git status; git pull --ff-only origin <branch>.
+   Do not overwrite uncommitted changes or silently create merge commits.
+
+Optional MCP push: set GIT_ALLOW_PUSH=true, restart server, call git_status
+to get the exact 40-character HEAD, then explicitly call git_push with that
+SHA. Push refuses dirty working trees, changed HEADs, unexpected remotes, and
+non-fast-forward updates; requires preexisting noninteractive Git credentials.
+Use Git Credential Manager on the PC; do not store PATs in .env.
+
+After pulling LKH_MCP, restart server.py and Cloudflare MCP Portal >
+MCP servers > LKH MCP > Sync capabilities, then enable the new tools.
+Local adapter tests: python -m unittest -v test_git_tools.py.
+
+Security: Git diffs may disclose local source. Only authorize explicitly
+selected repositories; keep GIT_ALLOW_PUSH=false unless genuinely needed.
+Git status is local-only and is not proof that origin is up to date.
