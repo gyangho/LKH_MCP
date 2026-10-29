@@ -152,9 +152,10 @@ The PyInstaller script now targets `src/server_launcher.py` and uses
 
 ### Windows system tray icon
 
-The background EXE includes a compact cyan/blue/violet hexagonal **M** emblem
-inspired by the supplied reference. It is generated deterministically using
-Pillow (`scripts/generate_icon.py`) during the Windows EXE build.
+The background EXE uses the **CLI-style pixel pig** selected by the user.
+The approved pixel-artwork is tracked as `branding/pig-terminal.png`.
+The Windows build uses Pillow (`scripts/generate_icon.py`) to convert it to
+transparent PNG and multi-size ICO without changing its design.
 
 When `LKH-MCP.exe` runs in an **interactive Windows user session**, it displays
 an icon in the Windows notification area. The right-click menu offers:
@@ -173,7 +174,7 @@ Before running from source without a Windows EXE, generate the icons:
 
 The PyInstaller build generates `assets/lkh-mcp.ico` and `assets/lkh-mcp.png`,
 embeds the .ico in the executable and bundles the PNG for the tray. Those generated
-files are ignored in Git; the deterministic generator is tracked instead.
+files are ignored in Git. The approved source PNG under `branding/` is tracked.
 On Linux or another OS the ordinary MCP server starts without a tray.
 **Windows Scheduled Tasks running without an interactive logged-in user cannot
 display a tray icon.** To show it, use a normal user logon session.

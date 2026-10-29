@@ -265,7 +265,8 @@ LKH_MCP/
 │   ├── tray.py               # native Windows tray menu
 │   └── version.py            # 0.0.1
 ├── tests/                    # isolated unit / optional live smoke tests
-├── scripts/generate_icon.py  # reproducible brand icon
+├── branding/pig-terminal.png # approved CLI pig icon artwork (tracked)
+├── scripts/generate_icon.py  # produce PNG and ICO from source
 ├── scripts/build-windows.ps1 # no-console EXE and embedded .ico
 ├── web/dashboard.html        # admin UI
 ├── docs/                     # operations guide
@@ -291,5 +292,5 @@ To launch the Windows tray and no-console process, build and run the EXE:
 The tray icon provides **대시보드 열기**, **상태 확인** and **종료**.
 The tray is visible only in an interactive logged-in Windows session;
 it does not appear in headless Windows services or logged-off sessions.
-Both EXE file icon and tray icon come from one deterministic Pillow generator.
+Both EXE and tray icons come from the approved pixel-art pig in branding/pig-terminal.png; Pillow converts that artwork into PNG and ICO without drawing a different logo.
 Local secrets, build artifacts, runtime logs and generated icons are ignored.
