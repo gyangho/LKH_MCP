@@ -101,7 +101,7 @@ def initialize() -> None:
         # Backwards compatibility: one-time import of existing local .env settings.
         from dotenv import load_dotenv
         load_dotenv(Path(__file__).resolve().parent.parent / ".env", override=False)
-        bootstrap = Path(os.environ.get("MCP_BOOTSTRAP_FILE") or "/run/secrets/mcp_bootstrap.json")
+        bootstrap = Path(os.environ.get("MCP_BOOTSTRAP_FILE") or "/run/secrets/mcp_bootstrap")
         if bootstrap.is_file():
             data = json.loads(bootstrap.read_text(encoding="utf-8"))
             if not isinstance(data, dict) or set(data) - SECRETS:

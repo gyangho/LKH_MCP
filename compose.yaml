@@ -6,8 +6,9 @@ services:
       dockerfile: Dockerfile
     image: lkh-mcp:0.0.1
     restart: unless-stopped
-    ports:
-      - "127.0.0.1:8000:8000"
+    # No published ports: only gateway and internal Docker services can reach MCP.
+    expose:
+      - "8000"
     environment:
       MCP_HOST: "0.0.0.0"
     volumes:
@@ -27,6 +28,31 @@ services:
       timeout: 5s
       retries: 3
       start_period: 30s
+
+  gateway:
+    image: nginx:stable-alpine
+    restart: unless-stopped
+    depends_on:
+      mcp:
+        condition: service_healthy
+    ports:
+      # Existing Portal upstream: http://192.0.1.22:8000/mcp
+      # Bind to Windows host IP (must be assigned to the host).
+      - "192.0.1.22:8000:8000"
+      # Cloudflare Tunnel on Windows host -> http://127.0.0.1:8001/admin
+      - "127.0.0.1:8001:8001"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8000/admin"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
 volumes:
   mcp-data:
