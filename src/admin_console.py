@@ -58,7 +58,7 @@ def _auth_response(exc: Exception) -> JSONResponse:
 
 
 def _html() -> str:
-    base = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
+    base = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent.parent))
     return (base / "web" / "dashboard.html").read_text(encoding="utf-8")
 
 

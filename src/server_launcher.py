@@ -17,7 +17,11 @@ def main():
     logging.basicConfig(filename=str(logs / "server.log"), level=logging.INFO)
     try:
         from server import run
-        run()
+        if os.name == "nt":
+            from tray import run_with_tray
+            run_with_tray(run)
+        else:
+            run()
     except BaseException:
         logging.exception("LKH MCP startup failed")
         raise

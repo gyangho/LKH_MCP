@@ -16,7 +16,7 @@ from typing import Iterator
 
 from dotenv import load_dotenv
 
-load_dotenv(dotenv_path=Path(__file__).with_name('.env'))
+load_dotenv(dotenv_path=Path(__file__).resolve().parent.parent / '.env')
 
 _IDENTIFIER = re.compile(r"^[A-Za-z][A-Za-z0-9_$#]{0,29}$")
 _oracledb = None
@@ -67,7 +67,7 @@ def _driver():
             if client_dir:
                 path = Path(client_dir).expanduser()
                 if not path.is_absolute():
-                    path = Path(__file__).resolve().parent / path
+                    path = Path(__file__).resolve().parent.parent / path
                 _oracledb.init_oracle_client(lib_dir=str(path.resolve()))
             _client_initialized = True
         return _oracledb

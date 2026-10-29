@@ -74,7 +74,7 @@ Example additional settings (replace placeholders with actual values):
 The executable does not bundle Git, Graphify, Oracle Instant Client or the
 existing database. Those dependencies must remain available on the PC.
 
-Version is tracked in version.py (0.0.1) and scripts/windows-version.txt.
+Version is tracked in src/version.py (0.0.1) and scripts/windows-version.txt.
 When releasing 0.0.2 or later, update both to the same version before rebuilding.
 
 ## Background execution
@@ -122,7 +122,7 @@ and route the hostname through your existing authenticated Cloudflare Tunnel.
 
 Run these commands on the Windows host:
 
-    .\.venv\Scripts\python.exe -m compileall server.py runtime_state.py admin_console.py server_launcher.py
+    .\.venv\Scripts\python.exe -m compileall server.py src
     .\.venv\Scripts\python.exe -m unittest -v test_runtime_state.py
     .\.venv\Scripts\python.exe server.py
 
@@ -135,3 +135,45 @@ commits, Git pushes or Graphify updates.
 Security boundary: JWT authentication and local OS permission isolation are
 essential. Do not treat web dashboard controls as a substitute for Cloudflare
 Access policy, firewalls or Windows file ACLs.
+
+
+### Source & test layout
+
+Sources are under `src/`, unit and smoke tests under `tests/`.
+The root `python server.py` launcher is still supported.
+
+    python -m unittest discover -s tests -t . -p "test_*.py" -v
+    python -m tests.test_oracle
+    python -m tests.test_mcp
+
+The PyInstaller script now targets `src/server_launcher.py` and uses
+`--collect-submodules mcp.server` instead of unused `mcp.cli`.
+
+
+### Windows system tray icon
+
+The background EXE includes a compact cyan/blue/violet hexagonal **M** emblem
+inspired by the supplied reference. It is generated deterministically using
+Pillow (`scripts/generate_icon.py`) during the Windows EXE build.
+
+When `LKH-MCP.exe` runs in an **interactive Windows user session**, it displays
+an icon in the Windows notification area. The right-click menu offers:
+- **대시보드 열기** — opens `ADMIN_PUBLIC_ORIGIN/admin` in the browser
+- **상태 확인** — checks local `/healthz` and shows a Windows notification
+- **종료** — quits the background server if no MCP tools are executing
+
+Double-clicking the icon opens the dashboard. The tray process shows no console.
+The server runs in a daemon thread under the tray's GUI main loop.
+
+Before running from source without a Windows EXE, generate the icons:
+
+    .\.venv\Scripts\python.exe -m pip install -r requirements-build.txt
+    .\.venv\Scripts\python.exe scripts/generate_icon.py
+    .\.venv\Scripts\python.exe src/server_launcher.py
+
+The PyInstaller build generates `assets/lkh-mcp.ico` and `assets/lkh-mcp.png`,
+embeds the .ico in the executable and bundles the PNG for the tray. Those generated
+files are ignored in Git; the deterministic generator is tracked instead.
+On Linux or another OS the ordinary MCP server starts without a tray.
+**Windows Scheduled Tasks running without an interactive logged-in user cannot
+display a tray icon.** To show it, use a normal user logon session.

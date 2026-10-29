@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any
 
 SCRIPT = (
-    Path(__file__).resolve().parent
+    Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent.parent))
     / "vendor"
     / "ui-ux-pro-max-skill"
     / "src"
@@ -51,7 +51,12 @@ def _execute(*args: str) -> dict[str, Any]:
             "vendor/ui-ux-pro-max-skill/src/ui-ux-pro-max/scripts/search.py 경로를 확인하세요."
         )
     # Do not accept a command string or use shell=True; never persist files.
-    interpreter = os.getenv("UIUX_PYTHON_EXECUTABLE") or sys.executable
+    if getattr(sys, "frozen", False):
+        interpreter = os.getenv("UIUX_PYTHON_EXECUTABLE", "").strip()
+        if not interpreter or not Path(interpreter).is_absolute() or not Path(interpreter).is_file():
+            raise RuntimeError("EXE 모드에서는 UIUX_PYTHON_EXECUTABLE에 python.exe 절대 경로를 지정하세요.")
+    else:
+        interpreter = os.getenv("UIUX_PYTHON_EXECUTABLE") or sys.executable
     cmd = [interpreter, str(SCRIPT), *args, "--json"]
     try:
         result = subprocess.run(

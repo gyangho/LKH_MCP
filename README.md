@@ -1,4 +1,4 @@
-# Oracle SELECT-only MCP — Windows local setup
+# LKH MCP — Windows server, Git, Graphify and admin console
 
 Designed for local testing with an existing Docker-hosted Oracle Database.
 **Do not expose on public Internet without MCP-compatible authentication**.
@@ -37,7 +37,7 @@ Client are installed. Driver is pinned to 3.4.2 to retain 11g Thick support.
 ## 2. Prove Oracle SELECT without MCP
 
 ```powershell
-.\.venv\Scripts\python.exe test_oracle.py
+.\.venv\Scripts\python.exe -m tests.test_oracle
 ```
 
 Expect ORACLE_SELECT_PASS and status MCP_OK.
@@ -55,7 +55,7 @@ http://127.0.0.1:8000/mcp (Streamable HTTP, NOT a web page).
 
 ```powershell
 cd C:\dev\oracle-mcp-select
-.\.venv\Scripts\python.exe test_mcp.py
+.\.venv\Scripts\python.exe -m tests.test_mcp
 ```
 
 Expect the tools listed and a response containing MCP_OK. For an additional
@@ -147,7 +147,7 @@ remote caller. Run the MCP server under a non-admin Windows account.
 Test the adapter without Oracle or installed Graphify:
 
 ```powershell
-.\.venv\Scripts\python.exe -m unittest -v test_graphify_tools.py
+.\.venv\Scripts\python.exe -m unittest -v tests.test_graphify_tools
 ```
 
 ## Warnings
@@ -197,7 +197,7 @@ Use Git Credential Manager on the PC; do not store PATs in .env.
 
 After pulling LKH_MCP, restart server.py and Cloudflare MCP Portal >
 MCP servers > LKH MCP > Sync capabilities, then enable the new tools.
-Local adapter tests: python -m unittest -v test_git_tools.py.
+Local adapter tests: python -m unittest -v tests.test_git_tools.
 
 Security: Git diffs may disclose local source. Only authorize explicitly
 selected repositories; keep GIT_ALLOW_PUSH=false unless genuinely needed.
@@ -250,5 +250,46 @@ Safety:
 Tests (do not require a live GitHub push):
 
 ```powershell
-.\.venv\Scripts\python.exe -m unittest -v test_git_commit_tools.py
+.\.venv\Scripts\python.exe -m unittest -v tests.test_git_commit_tools
 ```
+
+
+## 10. Repository structure & system tray
+
+```text
+LKH_MCP/
+├── server.py                 # compatible CLI entry
+├── src/                      # implementation (MCP, Oracle, Git, Graphify, admin)
+│   ├── server.py
+│   ├── server_launcher.py    # Windows tray EXE entry
+│   ├── tray.py               # native Windows tray menu
+│   └── version.py            # 0.0.1
+├── tests/                    # isolated unit / optional live smoke tests
+├── scripts/generate_icon.py  # reproducible brand icon
+├── scripts/build-windows.ps1 # no-console EXE and embedded .ico
+├── web/dashboard.html        # admin UI
+├── docs/                     # operations guide
+└── vendor/                   # UI UX Pro Max submodule
+```
+
+Run unit tests from the repository root:
+
+```powershell
+.\.venv\Scripts\python.exe -m unittest discover -s tests -t . -p "test_*.py" -v
+.\.venv\Scripts\python.exe -m tests.test_oracle
+.\.venv\Scripts\python.exe -m tests.test_mcp
+```
+
+`python server.py` remains a supported non-tray entry point.
+To launch the Windows tray and no-console process, build and run the EXE:
+
+```powershell
+.\scripts\build-windows.ps1
+.\dist\LKH-MCP-v0.0.1\LKH-MCP.exe
+```
+
+The tray icon provides **대시보드 열기**, **상태 확인** and **종료**.
+The tray is visible only in an interactive logged-in Windows session;
+it does not appear in headless Windows services or logged-off sessions.
+Both EXE file icon and tray icon come from one deterministic Pillow generator.
+Local secrets, build artifacts, runtime logs and generated icons are ignored.
