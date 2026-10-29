@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark"><title>LKH MCP — 설정 관리</title>
+<style>
+:root{color-scheme:dark;--bg:#060e1d;--panel:#101d30;--line:#293a52;--txt:#e7f0fb;--muted:#94a8c1;--teal:#63e6b2;--focus:#93c5fd;--warn:#f6c16f;--red:#fb8294;font-family:"Segoe UI","Malgun Gothic",system-ui,sans-serif}
+*{box-sizing:border-box}body{background:radial-gradient(880px 580px at 93% 2%,#102b43,transparent 72%),var(--bg);color:var(--txt);margin:0;min-height:100vh}
+button,input,textarea{font:inherit}button{cursor:pointer}button:focus-visible,input:focus-visible,textarea:focus-visible,a:focus-visible{outline:2px solid var(--focus);outline-offset:3px}
+a{color:#99d5ff;text-decoration:none}a:hover{text-decoration:underline}h1,h2,h3,p{margin:0}.muted{color:var(--muted)}.layout{display:grid;grid-template-columns:240px minmax(0,1fr);min-height:100vh}.rail{background:#071323;border-right:1px solid var(--line);padding:28px 15px;position:sticky;top:0;height:100vh}
+.brand{display:flex;align-items:center;gap:12px;padding:2px 12px 37px;font-size:15px;font-weight:750}.symbol{display:grid;place-items:center;width:37px;height:37px;border-radius:10px;background:linear-gradient(140deg,#16c9a3,#1460ae);color:#041b24;font-weight:850}.brand small{display:block;letter-spacing:1px;font-size:10px;color:var(--muted);font-weight:500;margin-top:4px}
+.rail-label{color:#627e9a;font-size:10px;letter-spacing:2px;margin:0 12px 12px}.nav{display:grid;gap:4px}.nav a{display:flex;align-items:center;gap:10px;padding:11px 13px;border-radius:10px;color:#a9bed5;font-size:13px;text-decoration:none}.nav a[aria-current=page]{background:#13352f;color:#8ef0bc;border:1px solid #215b4c}.nav a:hover{background:#1b3046}
+.main{max-width:1470px;width:100%;padding:29px 38px 48px;margin:auto}.topline{display:flex;justify-content:space-between;align-items:flex-start;gap:20px;margin-bottom:26px}.eyebrow{color:var(--teal);font-size:11px;letter-spacing:1.6px;font-weight:750;margin-bottom:9px}.topline h1{font-size:26px;letter-spacing:-.65px}.topline p{font-size:13px;color:var(--muted);margin-top:9px;line-height:1.6}.top-actions{display:flex;align-items:center;gap:10px}.pill{background:#112f2b;border:1px solid #26624b;border-radius:40px;color:#93efbb;padding:8px 12px;font-size:12px;white-space:nowrap}.button{background:#172942;border:1px solid #34506d;border-radius:9px;color:#e5f0fb;padding:9px 14px;font-size:12px}.button:hover{border-color:#88b8f1}.button:disabled{opacity:.45;cursor:not-allowed}
+.summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-bottom:20px}.summary>div{padding:18px 20px;border-radius:13px;border:1px solid var(--line);background:var(--panel)}.summary h2{font-size:12px;color:var(--muted);font-weight:500;margin-bottom:13px}.summary strong{font-size:20px;font-variant-numeric:tabular-nums}.summary span{display:block;font-size:11px;color:var(--muted);margin-top:8px}
+.content{display:grid;grid-template-columns:195px minmax(0,1fr);gap:18px}.tabs{align-self:start;display:grid;gap:5px;position:sticky;top:20px}.tabs button{background:transparent;border:1px solid transparent;color:#b1c3d8;text-align:left;padding:12px 14px;border-radius:9px;font-size:13px}.tabs button.selected{color:#96f5c5;background:#11362f;border-color:#265b4d;font-weight:650}.tabs button:hover{background:#18273b}
+.paper{background:#101d30;border:1px solid var(--line);border-radius:15px;padding:22px 25px;min-height:400px}.paper-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px}.paper-head h2{font-size:17px}.subtitle{color:var(--muted);font-size:12px;margin-bottom:23px;line-height:1.7}.setting{padding:20px 0;border-bottom:1px solid #26354c;display:grid;grid-template-columns:minmax(180px,.95fr) minmax(230px,1.05fr);gap:22px;align-items:center}.setting:last-child{border-bottom:0}.detail h3{font-size:13px;font-weight:650;margin-bottom:7px}.detail p{font-size:12px;color:var(--muted);line-height:1.55}.detail code{font-size:10px;color:#718aa6;display:block;margin-top:8px;overflow-wrap:anywhere}
+.field{display:flex;align-items:center;gap:8px}.field input{min-width:0;width:100%;padding:10px 11px;border:1px solid #415673;border-radius:9px;color:var(--txt);background:#0b1527;font-size:12px}.field input:focus{border-color:var(--focus)}.save{white-space:nowrap;background:#155c49;border:1px solid #308c6d;color:#e3fff0;border-radius:9px;padding:10px 14px;font-size:12px}.save:hover{background:#197052}.save:disabled{opacity:.48;cursor:not-allowed}
+.switch{width:49px;height:28px;border-radius:99px;border:1px solid #62738a;background:#314157;position:relative;flex-shrink:0}.switch:after{content:"";position:absolute;top:4px;left:4px;width:18px;height:18px;background:#dbe8f5;border-radius:50%;transition:transform .18s}.switch[aria-checked=true]{background:#167252;border-color:#52e5a0}.switch[aria-checked=true]:after{transform:translateX(20px);background:white}
+.value{font-size:12px;color:#8be5b3;min-width:42px}.warning{border:1px solid #675035;background:#2a241e;color:#ebca92;padding:14px 16px;border-radius:10px;font-size:12px;line-height:1.6;margin:18px 0}.error{display:none;border:1px solid #8d3a52;background:#331b2a;color:#ffafbf;padding:13px 15px;border-radius:10px;margin-bottom:16px;font-size:13px}.error.on{display:block}
+.audit{margin-top:20px;background:#0b172a;border:1px solid #26384f;border-radius:13px;padding:17px 20px}.audit h2{font-size:14px;margin-bottom:12px}.events{display:grid;gap:11px;color:#a5bbd1;font-size:12px}.events article{display:flex;justify-content:space-between;border-bottom:1px solid #1f3044;gap:15px;padding-bottom:10px}.events article:last-child{border:0}.toast{display:none;position:fixed;right:20px;bottom:20px;background:#144c3d;border:1px solid #55ac87;border-radius:9px;padding:13px 17px;font-size:13px;max-width:380px;box-shadow:0 15px 30px #0008}.toast.on{display:block}.toast.fail{background:#4e2630;border-color:#c65b6d}
+@media(max-width:1050px){.layout{grid-template-columns:1fr}.rail{position:static;height:auto;display:flex;align-items:center;gap:20px;padding:12px 18px}.brand{padding:0}.nav{display:flex}.rail-label{display:none}.main{padding:21px 18px}}@media(max-width:750px){.topline{flex-direction:column}.summary{grid-template-columns:1fr}.content{grid-template-columns:1fr}.tabs{position:static;display:flex;overflow-x:auto}.tabs button{white-space:nowrap}.setting{grid-template-columns:1fr;gap:12px}.paper{padding:18px}}@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+</style></head>
+<body><div class="layout"><aside class="rail"><div class="brand"><span class="symbol">L</span><div>LKH MCP<small>CONTROL CENTER</small></div></div><div><div class="rail-label">MANAGEMENT</div><nav class="nav"><a href="/admin">◫　모니터링</a><a href="/admin/config" aria-current="page">⚙　설정 관리</a><a href="/admin/codex">◈　Codex 승인</a></nav></div></aside>
+<main class="main"><header class="topline"><div><div class="eyebrow">INFRASTRUCTURE / CONFIGURATION</div><h1>환경 및 도구 설정</h1><p>변경 내용은 SQLite에 즉시 저장됩니다. 주요 실행 권한은 별도 실행 승인과 함께 관리됩니다.</p></div><div class="top-actions"><span class="pill">● SQLite 연결</span><button class="button" id="reload" type="button">↻ 새로고침</button></div></header>
+<div class="summary"><div><h2>설정 항목</h2><strong id="total">—</strong><span>허용 목록 기반 관리</span></div><div><h2>Oracle 비밀정보</h2><strong id="oracle-secret">—</strong><span>Docker secret으로만 관리</span></div><div><h2>Cloudflare Access</h2><strong id="access-secret">—</strong><span>관리자 인증 부트스트랩</span></div></div>
+<div id="error" class="error" role="alert"></div>
+<section class="content"><nav class="tabs" aria-label="설정 카테고리" id="categories"></nav><div>
+<div class="paper"><div class="paper-head"><h2 id="category-title">설정 로딩 중</h2><span class="pill" id="count">—</span></div><p class="subtitle" id="category-desc">권한과 시스템 설정을 안전하게 관리합니다.</p><div id="fields" aria-live="polite"></div></div>
+<div class="warning"><strong>권한 안내</strong>　Git commit/push와 Codex 실행 토글은 도구 사용 가능 여부만 결정합니다. 실제 Git 반영 및 Codex 작업은 사용자 승인 절차를 별도로 거쳐야 합니다. Oracle 비밀번호와 Access 인증 정보는 이 화면에서 읽거나 수정할 수 없습니다.</div>
+<div class="audit"><h2>최근 설정 변경 이력</h2><div id="audit" class="events">이력 확인 중...</div></div></div></section></main></div><div class="toast" id="toast" role="status" aria-live="polite"></div>
+<script>
+(function(){"use strict";
+const $=id=>document.getElementById(id), sections={git:["Git 권한","허용 저장소 및 로컬 Git 작업 정책"],graphify:["Graphify","코드 그래프 색인 및 조회 설정"],projects:["프로젝트","로컬 저장소를 통한 접근 범위"],codex:["Codex 디버깅","승인 기반 오류 분석과 일일 호출 제한"],oracle:["Oracle 데이터베이스","조회 전용 연결 설정 (비밀번호는 Docker secret)"]};
+let items=[],category="git";
+function showError(msg){$("error").textContent=msg;$("error").classList.add("on");}
+function toast(msg,bad){let e=$("toast");e.textContent=msg;e.className="toast on"+(bad?" fail":"");setTimeout(()=>e.className="toast",3800);}
+async function load(){
+$("error").classList.remove("on");
+try{const response=await fetch("/admin/api/config",{credentials:"same-origin",cache:"no-store"});if(!response.ok)throw Error("관리자 인증 또는 서버 API 오류: "+response.status);
+const data=await response.json();items=data.settings||[];
+$("total").textContent=items.length;
+$("oracle-secret").textContent=data.secrets_configured.oracle?"설정됨":"미설정";
+$("access-secret").textContent=data.secrets_configured.cloudflare_access?"설정됨":"미설정";
+render();const audit=$("audit");audit.replaceChildren();
+for(const entry of data.audit||[]){const row=document.createElement("article"),key=document.createElement("span"),date=document.createElement("span");key.textContent=entry.key+" · "+entry.actor;date.textContent=new Date(entry.at).toLocaleString("ko-KR");row.append(key,date);audit.append(row);}
+if(!(data.audit||[]).length)audit.textContent="아직 설정 변경 이력이 없습니다.";
+}catch(e){showError(e.message);}
+}
+function render(){
+const tab=$("categories");tab.replaceChildren();Object.entries(sections).forEach(([id,[name]])=>{const b=document.createElement("button");b.type="button";b.textContent=name;b.className=category===id?"selected":"";b.setAttribute("aria-pressed",String(category===id));b.onclick=()=>{category=id;render();};tab.append(b);});
+$("category-title").textContent=sections[category][0];$("category-desc").textContent=sections[category][1];
+const settings=items.filter(x=>x.category===category),root=$("fields");root.replaceChildren();$("count").textContent=settings.length+"개 항목";
+if(!settings.length){root.textContent="설정이 없습니다.";return;}
+for(const item of settings){
+const container=document.createElement("div");container.className="setting";
+const detail=document.createElement("div");detail.className="detail";
+const heading=document.createElement("h3");heading.textContent=item.label;
+const info=document.createElement("p");info.textContent=item.description;
+const code=document.createElement("code");code.textContent=item.key;detail.append(heading,info,code);
+const field=document.createElement("div");field.className="field";
+if(item.type==="bool"){
+const btn=document.createElement("button");btn.className="switch";btn.type="button";btn.setAttribute("role","switch");btn.setAttribute("aria-label",item.label);btn.setAttribute("aria-checked",String(item.value));
+const label=document.createElement("span");label.className="value";label.textContent=item.value?"활성":"비활성";
+btn.onclick=async()=>{const next=btn.getAttribute("aria-checked")!=="true";if(!confirm(item.label+" 기능을 "+(next?"활성화":"비활성화")+"할까요?"))return;btn.disabled=true;try{await save(item,next);btn.setAttribute("aria-checked",String(next));label.textContent=next?"활성":"비활성";}catch(e){toast(e.message,true);}finally{btn.disabled=false;}};
+field.append(btn,label);
+}else{
+const input=document.createElement("input");input.type=item.type==="int"?"number":"text";input.value=String(item.value);input.setAttribute("aria-label",item.label);input.autocomplete="off";if(item.type==="int")input.min="1";
+const button=document.createElement("button");button.type="button";button.className="save";button.textContent="저장";button.disabled=true;
+input.oninput=()=>{button.disabled=String(item.value)===input.value;};
+button.onclick=async()=>{if(!confirm(item.label+" 설정을 저장할까요?"))return;button.disabled=true;try{await save(item,item.type==="int"?Number(input.value):input.value);toast("설정이 저장되었습니다.",false);}catch(e){toast(e.message,true);button.disabled=false;}};
+field.append(input,button);
+}
+container.append(detail,field);root.append(container);
+}}
+async function save(item,value){const result=await fetch("/admin/api/config",{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json","X-LKH-Admin-Action":"1"},body:JSON.stringify({key:item.key,value,revision:item.revision})});if(!result.ok)throw Error("설정 저장 실패 ("+result.status+"). 새로고침 후 다시 시도하세요.");const saved=await result.json();item.value=saved.value;item.revision=saved.revision;toast(item.label+" 설정이 저장되었습니다.",false);}
+$("reload").onclick=load;load();
+})();
+</script></body></html>
