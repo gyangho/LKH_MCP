@@ -37,7 +37,7 @@ class TestUiuxTools(unittest.TestCase):
         self.tools = mcp.tools
 
     def test_registers_three_tools(self):
-        self.assertEqual(set(self.tools), {"uiux_search", "uiux_stack_guidelines", "uiux_generate_design_system"})
+        self.assertEqual(set(self.tools), {"uiux_search", "uiux_stack_guidelines", "uiux_generate_design_system", "uiux_diagnostics"})
 
     def test_search_uses_json_and_domain(self):
         result = self.tools["uiux_search"]("accessible navigation", "ux", 2)
