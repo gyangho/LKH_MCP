@@ -24,7 +24,6 @@ FIELDS = {
     "GRAPHIFY_EXECUTABLE": ("graphify", "Graphify 실행 파일", "text", "", "비우면 PATH에서 검색"),
     "CODEX_DELEGATION_ENABLED": ("codex", "Codex 디버깅 위임", "bool", False, "관리자 승인 후에만 실행"),
     "CODEX_MAX_RUNS_PER_DAY": ("codex", "일일 Codex 실행 제한", "int", 2, "1~10회"),
-    "CODEX_EXECUTABLE": ("codex", "Codex 실행 파일", "text", "", "실행 가능한 절대 경로 (컨테이너 내부 경로)"),
     "ORACLE_HOST": ("oracle", "Oracle 주소", "text", "127.0.0.1", "Docker라면 host.docker.internal 또는 DB 주소"),
     "ORACLE_PORT": ("oracle", "Oracle 포트", "int", 1521, "1~65535"),
     "ORACLE_SERVICE": ("oracle", "서비스 이름", "text", "", "SERVICE 또는 SID 중 한 개"),
@@ -35,7 +34,7 @@ FIELDS = {
     "ORACLE_CLIENT_LIB_DIR": ("oracle", "Oracle Client 디렉터리", "text", "", "Thick 모드 사용 시 컨테이너 경로"),
 }
 SECRETS = frozenset({"ORACLE_PASSWORD", "ADMIN_CF_TEAM", "ADMIN_CF_AUD", "ADMIN_ALLOWED_EMAILS", "ADMIN_PUBLIC_ORIGIN"})
-_PATH_FIELDS = {"CODEX_EXECUTABLE", "GIT_EXECUTABLE", "GRAPHIFY_EXECUTABLE", "ORACLE_CLIENT_LIB_DIR"}
+_PATH_FIELDS = {"GIT_EXECUTABLE", "GRAPHIFY_EXECUTABLE", "ORACLE_CLIENT_LIB_DIR"}
 _BOOL_FIELDS = {key for key, item in FIELDS.items() if item[2] == "bool"}
 
 
