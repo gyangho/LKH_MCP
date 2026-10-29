@@ -1,9 +1,9 @@
 """Test MCP discovery + oracle_select_dual via local Streamable HTTP."""
 import asyncio
-from mcp import Client
 
 
 async def main():
+    from mcp import Client
     async with Client("http://127.0.0.1:8000/mcp") as client:
         result = await client.list_tools()
         names = [t.name for t in result.tools]
