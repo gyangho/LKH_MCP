@@ -197,6 +197,7 @@ def run_approved(ident: str) -> dict:
             raise PermissionError("유효한 관리자 실행 승인이 필요합니다.")
         # Keep the quota across restarts in the SQLite database.
         conn = settings_store._connect()
+        acquired = False
         try:
             conn.execute("CREATE TABLE IF NOT EXISTS codex_runs (at INTEGER NOT NULL)")
             conn.execute("BEGIN IMMEDIATE")
@@ -207,10 +208,11 @@ def run_approved(ident: str) -> dict:
             if not _RUNNING.acquire(blocking=False):
                 conn.execute("ROLLBACK")
                 raise RuntimeError("Codex 작업이 이미 실행 중입니다.")
+            acquired = True
             conn.execute("INSERT INTO codex_runs(at) VALUES(?)", (int(time.time()),))
             conn.execute("COMMIT")
         except BaseException:
-            if _RUNNING.locked():
+            if acquired:
                 _RUNNING.release()
             raise
         finally:
