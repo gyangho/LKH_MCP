@@ -12,3 +12,5 @@ secrets/bootstrap.json
 secrets/codex_worker_token
 compose.override.yaml
 *.sqlite*
+
+worker/__pycache__

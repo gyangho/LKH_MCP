@@ -1,0 +1,35 @@
+# Optional separate Codex container. Use with base compose.yaml and --profile codex.
+# Codex container NEVER mounts MCP database, bootstrap file or project repositories.
+services:
+  mcp:
+    depends_on:
+      - codex-worker
+    secrets:
+      - codex_worker_token
+  codex-worker:
+    profiles: ["codex"]
+    build:
+      context: .
+      dockerfile: worker/Dockerfile
+    image: lkh-mcp-codex-worker:0.0.1
+    restart: unless-stopped
+    expose:
+      - "8765"
+    volumes:
+      - codex-auth:/home/codex/.codex
+    secrets:
+      - codex_worker_token
+    read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,size=192m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  codex-auth:
+
+secrets:
+  codex_worker_token:
+    file: ./secrets/codex_worker_token
