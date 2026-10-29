@@ -89,6 +89,19 @@ def _execute(*args: str) -> dict[str, Any]:
 
 
 def register_uiux_tools(mcp: Any) -> None:
+    @mcp.tool()
+    def uiux_diagnostics() -> dict:
+        """Read-only UI UX Pro Max installation check; no file paths or tokens exposed."""
+        frozen = bool(getattr(sys, "frozen", False))
+        interpreter = (os.environ.get("UIUX_PYTHON_EXECUTABLE", "").strip()
+                       if frozen else (os.environ.get("UIUX_PYTHON_EXECUTABLE") or sys.executable))
+        python_ok = bool(interpreter and Path(interpreter).is_file())
+        ready = SCRIPT.is_file() and python_ok
+        return {"ready": ready, "search_script_found": SCRIPT.is_file(),
+                "python_interpreter_available": python_ok, "packaged_exe": frozen,
+                "hint": ("정상" if ready else
+                         "UI UX Pro Max vendor 서브모듈과 Python 실행 경로를 확인하세요.")}
+
     """Register only UI/UX-domain tools on the existing MCPServer instance."""
 
     @mcp.tool()
