@@ -1,0 +1,36 @@
+name: lkh-mcp
+services:
+  mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: lkh-mcp:0.0.1
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8000:8000"
+    environment:
+      MCP_HOST: "0.0.0.0"
+    volumes:
+      - mcp-data:/app/data
+    secrets:
+      - mcp_bootstrap
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=128m
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz',timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+volumes:
+  mcp-data:
+
+secrets:
+  mcp_bootstrap:
+    file: ./secrets/bootstrap.json

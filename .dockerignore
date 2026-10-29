@@ -1,0 +1,14 @@
+.git
+.venv
+__pycache__
+*.pyc
+.env
+.env.*
+data
+build
+dist
+logs
+secrets/bootstrap.json
+secrets/codex_worker_token
+compose.override.yaml
+*.sqlite*

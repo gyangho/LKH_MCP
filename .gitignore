@@ -62,3 +62,9 @@ graphify-out/
 .DS_Store
 Thumbs.db
 Desktop.ini
+
+# Docker credentials and local overrides (bootstrap.example.json is tracked)
+/secrets/bootstrap.json
+/secrets/codex_worker_token
+/compose.override.yaml
+/data/
