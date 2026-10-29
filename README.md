@@ -202,3 +202,53 @@ Local adapter tests: python -m unittest -v test_git_tools.py.
 Security: Git diffs may disclose local source. Only authorize explicitly
 selected repositories; keep GIT_ALLOW_PUSH=false unless genuinely needed.
 Git status is local-only and is not proof that origin is up to date.
+
+## 8. AI-reviewed local Git commits (optional)
+
+This extension adds `git_stage_paths`, `git_preview_commit`, and `git_commit` to the same MCP
+server (the existing GitHub plugin is still used for editing files on GitHub).
+After pulling the new LKH_MCP code, append to the existing `.env`:
+
+```dotenv
+GIT_ALLOW_COMMIT=false
+```
+
+Set it to `true` only when allowing ChatGPT to **change the local Git index
+and create commits** on registered projects. Restart MCP and Sync capabilities
+in Cloudflare Portal. Existing `GIT_ALLOWED_REPOS` and `GRAPHIFY_PROJECTS`
+must include the project. Push stays independently controlled by
+`GIT_ALLOW_PUSH`.
+
+Suggested workflow:
+1. Ask ChatGPT to call `git_status(project="ITAM")` and review changes,
+   including `git_diff(project="ITAM")` for already tracked modifications.
+2. Choose **explicit individual files**, then call
+   `git_stage_paths(project="ITAM", paths=["src/example.tsx"], expected_head="...")`.
+   Already staged changes are rejected to avoid accidentally mixing unrelated work.
+3. Call `git_preview_commit(project="ITAM")`. The MCP returns the **complete**
+   staged patch, its SHA-256 fingerprint and HEAD SHA. If the patch exceeds 48 KB,
+   the tool refuses remote commits rather than concealing unseen changes.
+4. ChatGPT reviews the patch, drafts a meaningful commit subject/body, and calls
+   `git_commit(project="ITAM", expected_head="...", expected_diff_sha256="...", subject="...", body="...")`.
+   The tool re-verifies the full diff hash, HEAD, allowed file names and branch.
+5. Optionally push using `git_push` after obtaining the newly created HEAD SHA
+   from `git_status`. Then use the connected GitHub plugin to edit remotely;
+   `git pull --ff-only` on the Windows PC afterward.
+
+Safety:
+- No `git add .`, arbitrary commands, remote edits, checkout, reset or force push.
+- Secret-like filenames, symlinks, directories and large files are rejected.
+- Changes to the Git index or commit require the explicit local opt-in flag.
+- Repository Git hooks are disabled during the commit to reduce unintended code
+  execution by hooks; commit signing is disabled for this automation.
+- Repository-local Git config and Git filters are still a trust boundary. Do not
+  expose this feature against untrusted repositories or under an admin account.
+- It is **not** an automated secret scanner; inspect staged diff carefully.
+- Only 30 files and a fully readable patch of up to 48 KB can be committed
+  remotely. Larger changes should be committed locally.
+
+Tests (do not require a live GitHub push):
+
+```powershell
+.\.venv\Scripts\python.exe -m unittest -v test_git_commit_tools.py
+```
