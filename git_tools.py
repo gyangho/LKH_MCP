@@ -132,7 +132,8 @@ def register_git_tools(mcp: Any) -> None:
              "directory_exists": name in roots and roots[name].is_dir(),
              "git_exists": name in roots and (roots[name] / ".git").exists()}
             for name, repo in sorted(allowed.items())
-        ], "push_enabled": os.getenv("GIT_ALLOW_PUSH", "false").lower() == "true"}
+        ], "push_enabled": os.getenv("GIT_ALLOW_PUSH", "false").lower() == "true",
+           "commit_enabled": os.getenv("GIT_ALLOW_COMMIT", "false").lower() == "true"}
 
     @mcp.tool()
     def git_status(project: str) -> dict:
