@@ -12,6 +12,8 @@ from uiux_tools import register_uiux_tools
 from graphify_tools import register_graphify_tools
 from git_tools import register_git_tools
 from git_commit_tools import register_git_commit_tools
+from codex_delegation import register_codex_tools
+from codex_admin import register_codex_admin_routes
 from runtime_state import initialize_state, instrument_tools
 from admin_console import register_routes
 
@@ -46,6 +48,8 @@ register_uiux_tools(mcp)
 register_graphify_tools(mcp)
 register_git_tools(mcp)
 register_git_commit_tools(mcp)
+register_codex_tools(mcp)
+register_codex_admin_routes(mcp)
 register_routes(mcp)
 
 
