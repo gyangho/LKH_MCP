@@ -1,5 +1,4 @@
-"""Tests for persistence, read-only telemetry and MCP tool tracking."""
-import json
+"""Runtime telemetry and SQLite-backed toggle regression tests."""
 import os
 import tempfile
 import unittest
@@ -7,11 +6,13 @@ from pathlib import Path
 from unittest.mock import patch
 
 import runtime_state as state
+import settings_store
 
 
 class DummyMCP:
     def __init__(self):
         self.handlers = {}
+
     def tool(self):
         def decorator(fn):
             self.handlers[fn.__name__] = fn
@@ -23,23 +24,26 @@ class RuntimeTests(unittest.TestCase):
     def setUp(self):
         temp = tempfile.TemporaryDirectory()
         self.addCleanup(temp.cleanup)
-        self.folder = Path(temp.name)
+        folder = Path(temp.name)
         env = patch.dict(os.environ, {
-            "MCP_STATE_DIR": str(self.folder),
+            "MCP_DB_PATH": str(folder / "config.sqlite3"),
+            "MCP_BOOTSTRAP_FILE": str(folder / "none.json"),
             "GIT_ALLOW_COMMIT": "false",
             "GIT_ALLOW_PUSH": "false",
             "GRAPHIFY_ALLOW_UPDATE": "false",
         })
         env.start()
         self.addCleanup(env.stop)
+        settings_store._READY = False
+        self.addCleanup(lambda: setattr(settings_store, "_READY", False))
 
     def test_flags_persist_and_reload(self):
         result = state.change_flag("GIT_ALLOW_COMMIT", True, "admin@example.test")
         self.assertTrue(result["saved"])
         self.assertEqual(os.environ["GIT_ALLOW_COMMIT"], "true")
-        stored = json.loads((self.folder / "runtime-settings.json").read_text())
-        self.assertTrue(stored["GIT_ALLOW_COMMIT"])
+        self.assertTrue(settings_store.get("GIT_ALLOW_COMMIT"))
         os.environ["GIT_ALLOW_COMMIT"] = "false"
+        settings_store._READY = False
         state.initialize_state()
         self.assertEqual(os.environ["GIT_ALLOW_COMMIT"], "true")
 
@@ -50,11 +54,10 @@ class RuntimeTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     state.change_flag(key, val, "admin@example.test")
 
-    def test_invalid_config_is_rejected(self):
-        path = self.folder / "runtime-settings.json"
-        path.write_text('{"ORACLE_PASSWORD":true}', encoding="utf-8")
-        with self.assertRaises(ValueError):
-            state.initialize_state()
+    def test_flags_never_expose_database_password(self):
+        keys = {x["key"] for x in state.flags_snapshot()}
+        self.assertNotIn("ORACLE_PASSWORD", keys)
+        self.assertIn("CODEX_DELEGATION_ENABLED", keys)
 
     def test_telemetry_has_no_credentials_or_tool_args(self):
         mcp = DummyMCP()
