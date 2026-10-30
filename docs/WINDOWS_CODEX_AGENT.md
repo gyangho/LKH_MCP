@@ -31,7 +31,7 @@ Generate a strong random token **locally** (never paste it into ChatGPT, code, G
 python -c "import secrets; print(secrets.token_hex(32))"
 ```
 
-Add `CODEX_AGENT_TOKEN` to your existing **untracked** `secrets/bootstrap.json` while keeping existing Oracle/admin secrets. This bootstrap is read at container startup; recreate the MCP service after changing it. Configure **the exact same token** as the Windows Agent environment variable `LKH_CODEX_AGENT_TOKEN` (prefer Windows Credential Manager / secured OS secret handling). Do not save the token inside `windows_agent/config.json` or a tracked `.env`.
+Add `CODEX_AGENT_TOKEN` to your existing **untracked** `secrets/bootstrap.json` while keeping existing Oracle/admin secrets. This bootstrap is read at container startup; recreate the MCP service after changing it. For legacy deployments the Agent can automatically read the same token from the local ignored `secrets/bootstrap.json`, or use `LKH_CODEX_AGENT_TOKEN` for compatibility. Do not save the token inside `windows_agent/config.json` or a tracked `.env`.
 
 From React `/admin/config`, set:
 
@@ -47,7 +47,7 @@ Install Python, `git`, `codex`, and the Graphify Codex skill on the **Windows ma
 
 Create a **private** `windows_agent/config.json` from `windows_agent/config.example.json` with actual absolute Windows checkout paths. Keep this file untracked. Default `server_url` is `http://127.0.0.1:8001` on the same Windows host running Naru. For a different host use **HTTPS with validated TLS**, not `http://192.0.1.22:8001` with the bearer token. Limit ingress to Private Access, no public endpoints.
 
-In a PowerShell session, supply the token through the OS-managed secret or an existing protected bootstrap file without printing it:
+The Agent now automatically discovers credentials in order: existing `LKH_CODEX_AGENT_TOKEN`, private `windows_agent/token.json`, and local `secrets/bootstrap.json` (legacy). A manual environment variable is **not required**. The following optional example remains supported:
 
 ```powershell
 $env:LKH_CODEX_AGENT_TOKEN = (Get-Content .\secrets\bootstrap.json -Raw | ConvertFrom-Json).CODEX_AGENT_TOKEN
@@ -182,3 +182,51 @@ python -c "from windows_agent.agent import safe_env; print([(k,v) for k,v in saf
 This patch also normalizes the allowed key to `SystemDrive` on Windows,
 so the earlier diagnostic returns the actual system drive. A running Agent
 must be restarted for any source change to take effect.
+
+## Codex Agent token lifecycle — administrator-managed
+
+`/admin/codex` now includes **Codex Agent 인증 토큰 관리**.
+It is protected by the existing administrator session and same-origin CSRF checks.
+
+- **Issue / Rotate**: generate a cryptographically random token, store only its
+  SHA-256 fingerprint (full verifier hash) in the persistent SQLite volume, and
+  show the plaintext exactly **once** to the authenticated administrator.
+- **Revoke**: invalidate the managed token immediately without deleting the
+  persistent revoke marker. Neither rotation nor revocation exposes token text in
+  status, audit logs, or subsequent reads.
+- **Legacy compatibility**: before first use of token management, the existing
+  `CODEX_AGENT_TOKEN` from `secrets/bootstrap.json` still works. After issuing
+  or revoking a managed token, the old bootstrap token is intentionally invalid,
+  including after server restart. Do **not** rotate during a running task.
+- **Deployment**: maintain the `mcp-data` Docker volume. Removing it destroys
+  the credential verifier and job history. A normal container rebuild preserves it.
+  The new token becomes active immediately; no Docker rebuild is required to
+  activate later rotations.
+- **Security**: no unauthenticated Agent token download endpoint exists.
+  Deliver the one-time token from the administrator to the specific Windows host
+  over a trusted channel; an unauthenticated Agent cannot ask the server for its key.
+
+For the Windows Agent to start **without manually setting an environment variable**,
+create an ignored local file `windows_agent/token.json`:
+
+```json
+{"token":"PASTE_ONE_TIME_ADMIN_TOKEN_HERE"}
+```
+
+Use the actual one-time token shown by the administrator console, not the
+placeholder. This file is ignored by Git but still must be restricted to the
+dedicated Windows Agent account using filesystem permissions. Do not paste the
+token in chats, CI, logs, or checked-in configuration. Existing
+`secrets/bootstrap.json` also works for legacy tokens when no newer token file
+exists. For generated/rotated tokens use `windows_agent/token.json` to avoid
+editing the Docker bootstrap file.
+
+With the token file present, start the Agent normally:
+
+```powershell
+python .\windows_agent\agent.py --config .\windows_agent\config.json
+```
+
+For new managed tokens the server cannot issue keys to unauthenticated clients.
+A future device enrollment protocol would require a separate trusted
+bootstrap/approval step and is outside this change.
