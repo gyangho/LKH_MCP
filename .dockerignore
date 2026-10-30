@@ -9,11 +9,8 @@ build
 dist
 logs
 secrets/bootstrap.json
-secrets/codex_worker_token
 compose.override.yaml
 *.sqlite*
-
-worker/__pycache__
 
 frontend/node_modules/
 frontend/dist/
