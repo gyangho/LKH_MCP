@@ -51,3 +51,20 @@ This is an implementation-evidence appendix to [ARCHITECTURE](ARCHITECTURE.md), 
 - [ ] Inspect actual host OS account permissions, Naru docker context/portproxy, Cloudflare policy + backend bypass.
 - [ ] Verify Oracle Instant Client / thick mode and current DB data counts/backup restore in approved non-production staging.
 - [ ] Approve cutover preconditions/ADR after evidence; **I0 cannot be marked VERIFIED from CI alone**.
+
+## Portal read-only probe (2026-10-30, tool results; no live host inspection)
+
+| Probe | Observation | Interpretation |
+|---|---|---|
+| `portal_list_servers` | LKH MCP enabled | Connector selection only; not a host health guarantee |
+| `uiux_diagnostics` | `ready=true`, `packaged_exe=false`, `search_script_found=true` | Existing Docker/Python endpoint UIUX working; **does not validate frozen Windows bundle** |
+| `graphify_list_projects` | `projects=[]` | No synced project graphs visible to this connector at inspection time |
+| `oracle_select_dual` | MCP tool returned an execution error without Oracle error code | **UNVERIFIED/BLOCKED**: cannot infer whether Oracle DB, client, credentials, or upstream tool is at fault |
+
+No Naru restart, DB query beyond the fixed DUAL check, Cloudflare policy modification, file mutation on the Windows host, or secret download was performed. Before I0 VERIFIED, investigate the DUAL execution failure through authorized redacted server logs and Windows-side Oracle client checks.
+
+## Refac I1 test evidence
+
+- PR draft #8, Windows Actions run `41022366248`: Windows 3.12 native config tests **PASS**, PyInstaller build/asset `--check` **PASS**, live isolated `127.0.0.1:18080/healthz` HTTP **200**, isolated staging SQLite creation **PASS**. Unsigned preview bundle uploaded as a CI artifact.
+- PR Python/frontend/gateway run on initial refac commit **PASS**; next changes require their own CI checks.
+- These checks prove the staging executable **starts** on the GitHub-hosted Windows runner. They do not prove actual corporate PC Oracle, Cloudflare private WARP, Windows SCM service/Agent Task Scheduler, UIUX external interpreter or rollout.
