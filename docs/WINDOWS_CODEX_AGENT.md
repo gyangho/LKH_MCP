@@ -148,3 +148,21 @@ If you enable MXC with `[features] prefer_mxc = true` in your local
 the `SystemDrive` fix before re-running queued verification. Installing MXC or
 configuring it does not by itself fix an old Agent that strips the environment.
 The server still only receives the final bounded verification report.
+
+### Missing `SystemDrive` in PowerShell or Task Scheduler
+
+An Agent launched from a shell without `SystemDrive` previously forwarded an
+empty value to Codex even when the allowlist included the variable. The Agent now
+reconstructs the drive from the Windows installation directory `SystemRoot`
+(or `WINDIR`), validating the drive letter and refusing to guess or weaken the
+sandbox. If none of these values is valid, fix the Windows session environment.
+
+Before restarting an updated Agent, verify without exposing credentials:
+
+```powershell
+python -c "from windows_agent.agent import safe_env; print('SystemDrive:', safe_env().get('SystemDrive'))"
+```
+
+A correct result is the actual Windows installation drive (often `C:`).
+Restart the existing Windows Agent after updating its code; the running Python
+process does not automatically reload modifications from Git.
