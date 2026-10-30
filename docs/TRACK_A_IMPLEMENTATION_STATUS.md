@@ -109,3 +109,13 @@ These code deliverables are checkpoints, not user authorization to deploy.
 - Initial Agent JSON configuration is created in `install-agent-task.ps1` **before** task registration, rather than in Installer `ssPostInstall` after the task might have been disabled. If a project checkout is omitted, the Agent task remains disabled; the Pig tray remains independently registered. Existing config is not overwritten, and new Agent IDs are randomized.
 - Windows CI now checks that the initial Agent configuration is created, matches the repo and private port, leaves the task enabled, and that heartbeat state stays private to the Admin listener. Re-run still required before treating this change as verified.
 - These checks do not authorize deployment to the user's PC, Cloudflare cutover or production DB migration. The full device security and real Oracle/Windows desktop gates remain open.
+
+## October 30 follow-up: Windows CI failures resolved / I7 no-clobber staging
+
+- Refac commit `9742a8c5`: **Windows Native Suite PASS** ([run 41032060220](https://github.com/gyangho/LKH_MCP/actions/runs/41032060220)), including SCM, DPAPI, real task registration, first-run Agent configuration, Native HTTP routing, SQLite migration, and unsigned Inno packaging. Python/Frontend/Gateway also PASS.
+- Recovered a corrupted `scripts/install-agent-task.ps1` and duplicate malformed Windows Actions YAML on `refac` **without changing main**. The workflow now syntax-checks Windows native PowerShell scripts early and triggers on `scripts/**`.
+- I4 Pixel Pig green requires a real current authenticated Agent heartbeat and TaskScheduler Running. Offline heartbeat -> pink, inaccessible service/task -> gray; loopback tray status returns no Agent identity or credential.
+- I5 rotated DPAPI credentials now preserve the Agent user's Windows file ACL and attempt restoration of the previous encrypted file if SQLite update fails. This does **not** remove the cross-resource crash window or upgrade the shared secret to non-exportable CNG/challenge-response.
+- I7 staging now verifies `PRAGMA integrity_check`, row counts, and the **logical SHA-256 of schema/data**. A backup destination is created with same-directory atomic no-replace hard-link, preventing an intervening process from having its file overwritten. Concurrent source modification fails closed on digest mismatch. An approved, consistent Docker export is still required.
+- GitHub-hosted Windows Runner ≠ the target PC. A signed Installer, Oracle Thick/UI UX frozen feature parity, login/logout/reboot, Windows accounts/ACL on the corporate host, silent upgrade/uninstall, and actual Naru/Cloudflare cutover and rollback are **NOT VERIFIED**. The code remains staging-only; no production transition was performed.
+
