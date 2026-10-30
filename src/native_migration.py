@@ -65,14 +65,11 @@ def copy_snapshot(source: Path, destination: Path) -> dict:
             raise RuntimeError("Table row-count mismatch after backup")
         if migrated["logical_sha256"] != original["logical_sha256"]:
             raise RuntimeError("Logical contents or schema mismatch after backup")
-        # Fail closed if someone creates destination during backup.
-        with destination.open("xb"):
-            pass
-        try:
-            os.replace(temporary, destination)
-        except BaseException:
-            destination.unlink(missing_ok=True)
-            raise
+        # Same-directory hard-link is an atomic NO-REPLACE creation.
+        # Unlike os.replace(), this can never overwrite another backup even
+        # if it was created while sqlite3.backup was running.
+        # Unsupported volumes fail closed rather than risking data loss.
+        os.link(temporary, destination)
         return {"source": str(source), "destination": str(destination),
                 "source_tables": original["tables"], "copied_tables": migrated["tables"],
                 "integrity": migrated["integrity"],

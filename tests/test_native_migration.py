@@ -2,6 +2,8 @@
 import sqlite3
 import tempfile
 import unittest
+from contextlib import closing
+from unittest.mock import patch
 from pathlib import Path
 
 from native_migration import copy_snapshot, inspect_database
@@ -37,8 +39,9 @@ class MigrationTests(unittest.TestCase):
         dest = self.root / "staging.sqlite3"
         copy_snapshot(self.original, dest)
         before = inspect_database(self.original)
-        with sqlite3.connect(dest) as db:
-            db.execute("UPDATE critical_events SET name='changed' WHERE id=1")
+        with closing(sqlite3.connect(dest)) as db:
+            with db:
+                db.execute("UPDATE critical_events SET name='changed' WHERE id=1")
         after = inspect_database(dest)
         self.assertEqual(before["tables"], after["tables"])
         self.assertNotEqual(before["logical_sha256"], after["logical_sha256"])
@@ -51,6 +54,17 @@ class MigrationTests(unittest.TestCase):
         self.assertEqual(dest.read_bytes(), b"KEEP")
         with self.assertRaises(ValueError):
             copy_snapshot(self.original, self.original)
+
+    def test_racing_destination_creation_is_never_overwritten(self):
+        destination = self.root / "racing.sqlite3"
+        def another_writer(source, target):
+            Path(target).write_bytes(b"other-process-data")
+            raise FileExistsError("racing destination")
+        with patch("native_migration.os.link", side_effect=another_writer):
+            with self.assertRaises(FileExistsError):
+                copy_snapshot(self.original, destination)
+        self.assertEqual(destination.read_bytes(), b"other-process-data")
+        self.assertEqual(inspect_database(self.original)["tables"]["critical_events"], 1)
 
     def test_requires_explicit_existing_destination_directory(self):
         with self.assertRaises(FileNotFoundError):
