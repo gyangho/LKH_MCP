@@ -57,17 +57,53 @@ Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile
 [Code]
 var
   AgentPage: TInputQueryWizardPage;
+  ProjectPage: TInputQueryWizardPage;
 
 procedure InitializeWizard;
 begin
   AgentPage := CreateInputQueryPage(wpSelectDir,
     'Codex Agent Windows user', 'Select the logged-in Codex CLI account',
-    'The Agent requires an interactive Windows logon and a valid project config. It is not started automatically until configured.');
+    'The Agent starts only after a project checkout is configured and the Codex CLI login account is available.');
   AgentPage.Add('Agent username (DOMAIN\User or local name):', False);
   AgentPage.Values[0] := ExpandConstant('{username}');
+  ProjectPage := CreateInputQueryPage(AgentPage.ID,
+    'Codex Agent project', 'Optional initial local checkout',
+    'Enter an existing Git checkout; leave the path empty to disable the Agent task until configured.');
+  ProjectPage.Add('Project alias:', False);
+  ProjectPage.Add('GitHub owner/repository:', False);
+  ProjectPage.Add('Absolute Windows checkout path:', False);
+  ProjectPage.Values[0] := 'LKH_MCP';
+  ProjectPage.Values[1] := 'gyangho/LKH_MCP';
+  ProjectPage.Values[2] := '';
 end;
 
 function GetAgentUser(Param: String): String;
 begin
   Result := AgentPage.Values[0];
+end;
+
+function JsonString(S: String): String;
+begin
+  StringChangeEx(S, '\', '\\', True);
+  StringChangeEx(S, '"', '\"', True);
+  StringChangeEx(S, #13, '', True);
+  StringChangeEx(S, #10, '', True);
+  Result := '"' + S + '"';
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+var
+  Path, Contents, ProjectPath: String;
+begin
+  if CurStep <> ssPostInstall then Exit;
+  ProjectPath := Trim(ProjectPage.Values[2]);
+  if ProjectPath = '' then Exit;
+  Path := ExpandConstant('{commonappdata}\LKH-MCP\config\agent.json');
+  if FileExists(Path) then Exit;
+  Contents := '{"server_url":"http://127.0.0.1:18081","agent_id":"win-dev-01",' +
+    '"poll_interval_seconds":10,"projects":{' + JsonString(ProjectPage.Values[0]) +
+    ':{"repository":' + JsonString(ProjectPage.Values[1]) +
+    ',"path":' + JsonString(ProjectPath) + '}}}';
+  if not SaveStringToFile(Path, Contents, False) then
+    RaiseException('Failed to create initial Codex Agent project config');
 end;
