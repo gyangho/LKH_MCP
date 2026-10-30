@@ -37,6 +37,6 @@ if (Test-Path -LiteralPath $config) {
 $com = New-Object -ComObject "Schedule.Service"
 $com.Connect()
 $registered = $com.GetFolder("\").GetTask("LKH-Codex-Agent")
-$descriptor = $registered.GetSecurityDescriptor(15)
+$descriptor = $registered.GetSecurityDescriptor(4)
 $registered.SetSecurityDescriptor($descriptor + "(A;;GRGX;;;LS)", 0)
 Write-Host "Task registered for $AgentUser. Agent account must be logged in and authorized."
