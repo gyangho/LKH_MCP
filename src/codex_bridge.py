@@ -177,6 +177,9 @@ def get_task(task_id: str) -> dict:
 
 
 def check_agent_token(header: str) -> bool:
+    if os.getenv("LKH_NATIVE_MODE") == "1":
+        from native_enrollment import check_access
+        return check_access(header)
     stored = os.getenv("CODEX_AGENT_TOKEN", "")
     if len(stored) < 32 or not stored.isascii():
         return False

@@ -22,7 +22,7 @@ try {
         if ($LASTEXITCODE -ne 0) { throw "npm run build failed" }
     } finally { Pop-Location }
     if (-not (Test-Path "frontend\dist\index.html")) { throw "Missing frontend/dist/index.html" }
-    & $Python -m pip install -r requirements.txt -r requirements-build.txt
+    & $Python -m pip install -r requirements.txt -r requirements-build.txt -r requirements-native-build.txt
     if ($LASTEXITCODE -ne 0) { throw "Dependency installation failed" }
     & $Python scripts/generate_icon.py
     if ($LASTEXITCODE -ne 0) { throw "Approved Pixel Pig icon generation failed" }
@@ -30,6 +30,7 @@ try {
         --name LKH-MCP-Server --paths src `
         --version-file "scripts/windows-version.txt" --icon "assets/lkh-mcp.ico" `
         --collect-submodules mcp.server --collect-submodules oracledb `
+        --hidden-import win32com.client --hidden-import win32crypt `
         --add-data "frontend/dist;web/dist" `
         --add-data "vendor/ui-ux-pro-max-skill;vendor/ui-ux-pro-max-skill" `
         src/native_server.py

@@ -48,6 +48,13 @@ register_agent_routes(mcp)
 register_codex_admin_routes(mcp)
 register_routes(mcp)
 
+# Native-only privileged APIs, never registered in the Docker deployment.
+if os.getenv("LKH_NATIVE_MODE") == "1":
+    from native_host_routes import register_native_host_routes
+    from native_enrollment_routes import register_native_enrollment_routes
+    register_native_host_routes(mcp)
+    register_native_enrollment_routes(mcp)
+
 
 def run() -> None:
     mcp.run(

@@ -47,6 +47,8 @@ type CodexAgent = {
   };
   current_task: { id: string; project: string; kind: string } | null;
 };
+type NativeHost = { agent_task_state: string; server: string; agents: CodexAgent[] };
+type NativeEnrollment = { enrolled: boolean; mode: string };
 type CodexAgentsResponse = {
   enabled: boolean;
   token_configured: boolean;
@@ -499,13 +501,41 @@ function Config({
 function Codex({
   tasks,
   agents,
+  nativeHost,
+  nativeEnrollment,
   refresh,
 }: {
   tasks: CodexTask[];
   agents: CodexAgentsResponse | null;
+  nativeHost: NativeHost | null;
+  nativeEnrollment: NativeEnrollment | null;
   refresh: () => void;
 }) {
   const [saving, setSaving] = useState("");
+  async function hostAction(action: "start" | "stop" | "restart") {
+    if (!confirm("등록된 Windows Agent 작업을 " + action + " 하시겠습니까?")) return;
+    setSaving("host");
+    try {
+      await api("/admin/api/host/agent/" + action, {});
+      refresh();
+    } catch (e) {
+      alert((e as Error).message);
+    } finally {
+      setSaving("");
+    }
+  }
+  async function rotateEnrollment() {
+    if (!confirm("기존 Agent 세션을 즉시 무효화하고 장치 인증정보를 교체하시겠습니까?")) return;
+    setSaving("rotate");
+    try {
+      await api("/admin/api/host/enrollment/rotate", { confirm: "ROTATE" });
+      refresh();
+    } catch (e) {
+      alert((e as Error).message);
+    } finally {
+      setSaving("");
+    }
+  }
   async function decide(id: string, action: string) {
     if (
       !confirm(
@@ -529,6 +559,27 @@ function Codex({
   }
   return (
     <>
+      {nativeHost && (
+        <section className="panel">
+          <div className="heading">
+            <h2>Windows Native · Agent 실행 관리</h2>
+            <span className="tag">Task: {nativeHost.agent_task_state}</span>
+          </div>
+          <p className="muted">Windows 작업 스케줄러의 등록된 LKH-Codex-Agent만 제어합니다.
+            요청 수락과 실제 Heartbeat 온라인은 별도로 확인합니다.</p>
+          <div className="actions">
+            <Button onClick={() => void hostAction("start")} disabled={saving !== ""}>Agent 시작</Button>
+            <Button onClick={() => void hostAction("stop")} disabled={saving !== "" || Boolean(agents?.agents.some(a => a.busy))} danger>Agent 중지</Button>
+            <Button onClick={() => void hostAction("restart")} disabled={saving !== "" || Boolean(agents?.agents.some(a => a.busy))}>Agent 재시작</Button>
+          </div>
+          {nativeEnrollment && (
+            <p className="muted">
+              자동 장치 인증: {nativeEnrollment.enrolled ? "등록됨" : "미등록"} ·
+              <Button onClick={() => void rotateEnrollment()} disabled={saving !== "" || !nativeEnrollment.enrolled}>장치 인증 갱신</Button>
+            </p>
+          )}
+        </section>
+      )}
       <section className="panel">
         <div className="heading">
           <h2>Windows Codex Agent 연결</h2>
@@ -648,6 +699,8 @@ function App() {
     [secret, setSecret] = useState({ oracle: false, local_admin: false }),
     [tasks, setTasks] = useState<CodexTask[]>([]),
     [agents, setAgents] = useState<CodexAgentsResponse | null>(null),
+    [nativeHost, setNativeHost] = useState<NativeHost | null>(null),
+    [nativeEnrollment, setNativeEnrollment] = useState<NativeEnrollment | null>(null),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false);
   const refresh = useCallback(async () => {
@@ -663,6 +716,8 @@ function App() {
         }>("/admin/api/config"),
         api<{ tasks: CodexTask[] }>("/admin/api/codex/tasks"),
         api<CodexAgentsResponse>("/admin/api/codex/agents"),
+        api<NativeHost>("/admin/api/host/services"),
+        api<NativeEnrollment>("/admin/api/host/enrollment"),
       ]);
       for (let i = 0; i < result.length; i++) {
         const r = result[i];
@@ -681,9 +736,13 @@ function App() {
           }
           if (i === 3) setTasks((r.value as { tasks: CodexTask[] }).tasks);
           if (i === 4) setAgents(r.value as CodexAgentsResponse);
+          if (i === 5) setNativeHost(r.value as NativeHost);
+          if (i === 6) setNativeEnrollment(r.value as NativeEnrollment);
         }
       }
-      const failed = result.filter((r) => r.status === "rejected");
+      if (result[5].status === "rejected") setNativeHost(null);
+      if (result[6].status === "rejected") setNativeEnrollment(null);
+      const failed = result.slice(0, 5).filter((r) => r.status === "rejected");
       setError(
         failed.length
           ? failed
@@ -787,7 +846,8 @@ function App() {
             refresh={() => void refresh()}
           />
         ) : (
-          <Codex tasks={tasks} agents={agents} refresh={() => void refresh()} />
+          <Codex tasks={tasks} agents={agents} nativeHost={nativeHost}
+            nativeEnrollment={nativeEnrollment} refresh={() => void refresh()} />
         )}
         <footer>
           © LKH MCP · Private Operations · NanumSquare (NAVER, SIL OFL 1.1)

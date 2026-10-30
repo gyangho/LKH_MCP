@@ -244,6 +244,43 @@ def post_json(base: str, route: str, payload: dict, token: str, timeout: int = 3
         return json.loads(response.read(500_000).decode("utf-8"))
 
 
+def native_device_token(base: str) -> str | None:
+    """Obtain a short-lived Agent token using Installer-provisioned DPAPI key.
+
+    The device credential never appears in config.json, CLI flags or logs.
+    Enrollment is supported only on same-host loopback, not remote HTTP.
+    """
+    if os.name != "nt":
+        return None
+    url = urllib.parse.urlsplit(base)
+    if url.scheme != "http" or url.hostname not in ("127.0.0.1", "localhost", "::1"):
+        return None
+    programdata = os.getenv("PROGRAMDATA", "")
+    if not programdata:
+        return None
+    path = Path(programdata) / "LKH-MCP" / "config" / "agent-credential.bin"
+    if not path.is_file():
+        return None
+    if path.stat().st_size > 4096:
+        raise RuntimeError("Device enrollment file too large")
+    import win32crypt
+    _, raw_secret = win32crypt.CryptUnprotectData(
+        path.read_bytes(), None, None, None, 0)
+    secret = raw_secret.decode("ascii")
+    if not 48 <= len(secret) <= 128:
+        raise RuntimeError("Invalid device enrollment key")
+    req = urllib.request.Request(
+        base + "/admin/agent/enrollment/session", method="POST", data=b"{}",
+        headers={"Authorization": "Device " + secret,
+                 "Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=10) as response:
+        result = json.loads(response.read(4096).decode("utf-8"))
+    token = result.get("access_token")
+    if not isinstance(token, str) or len(token) < 32:
+        raise RuntimeError("Invalid server session response")
+    return token
+
+
 def probe_capabilities() -> dict[str, bool]:
     """Check the exact Windows account that runs this Agent; never return CLI output."""
     codex = shutil.which("codex")
@@ -310,9 +347,25 @@ def main() -> None:
     args = ap.parse_args()
     cfg = json.loads(Path(args.config).read_text(encoding="utf-8"))
     base, agent_id = validate_config(cfg)
-    token = os.getenv("LKH_CODEX_AGENT_TOKEN", "")
+    token = native_device_token(base)
+    managed = token is not None
+    if not managed:
+        token = os.getenv("LKH_CODEX_AGENT_TOKEN", "")
     if len(token) < 32:
-        raise RuntimeError("LKH_CODEX_AGENT_TOKEN environment variable required (32+ chars)")
+        raise RuntimeError("Agent not enrolled; install through LKH MCP Installer or configure existing bootstrap token")
+    last_refresh = time.monotonic()
+    refresh_lock = threading.Lock()
+
+    def current_token(force: bool = False) -> str:
+        nonlocal token, last_refresh
+        if managed and (force or time.monotonic() - last_refresh >= 480):
+            with refresh_lock:
+                if force or time.monotonic() - last_refresh >= 480:
+                    token = native_device_token(base)
+                    if not token:
+                        raise RuntimeError("Native enrollment vanished")
+                    last_refresh = time.monotonic()
+        return token
     interval = max(5, min(60, int(cfg.get("poll_interval_seconds", 10))))
     projects = list(cfg["projects"])
     stop = threading.Event()
@@ -322,7 +375,7 @@ def main() -> None:
     heartbeat_interval = min(interval, 15)
     capabilities = probe_capabilities()
     last_probe = time.monotonic()
-    send_heartbeat(base, agent_id, projects, capabilities, token)
+    send_heartbeat(base, agent_id, projects, capabilities, current_token())
 
     def maintain_presence() -> None:
         nonlocal capabilities, last_probe
@@ -330,7 +383,12 @@ def main() -> None:
             if time.monotonic() - last_probe >= 120:
                 capabilities = probe_capabilities()
                 last_probe = time.monotonic()
-            send_heartbeat(base, agent_id, projects, capabilities, token)
+            try:
+                if not send_heartbeat(base, agent_id, projects, capabilities, current_token()):
+                    if managed:
+                        current_token(force=True)
+            except (OSError, RuntimeError, ValueError):
+                pass
 
     presence_thread = threading.Thread(
         target=maintain_presence, name="codex-agent-heartbeat", daemon=True
@@ -340,16 +398,21 @@ def main() -> None:
         while True:
             try:
                 response = post_json(base, "/admin/agent/claim", {"agent_id": agent_id,
-                            "projects": projects}, token)
+                            "projects": projects}, current_token())
                 job = response.get("job")
                 if job:
                     success, report, error, graph = process(job, cfg)
                     answer = {"id": job["id"], "lease": response["lease"],
                               "agent_id": agent_id, "success": success,
                               "report": report[:16000], "error": error[:2000], "graph_base64": graph}
-                    post_json(base, "/admin/agent/complete", answer, token, timeout=90)
+                    post_json(base, "/admin/agent/complete", answer, current_token(), timeout=90)
                     print(f"Task {job['id'][:8]}: {'OK' if success else 'FAILED'}", flush=True)
             except (urllib.error.URLError, ValueError, OSError, KeyError, RuntimeError) as exc:
+                if managed and isinstance(exc, urllib.error.HTTPError) and exc.code == 401:
+                    try:
+                        current_token(force=True)
+                    except (OSError, RuntimeError, ValueError):
+                        pass
                 print(f"Agent communication issue: {type(exc).__name__}", file=sys.stderr, flush=True)
             if args.once:
                 return

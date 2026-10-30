@@ -54,6 +54,7 @@ def prepare_native_environment(
         raise ValueError("Invalid native admin port")
     if admin_port in {"8000", "8001"} or port == admin_port:
         raise ValueError("Preview ports must be distinct and cannot use live Docker ports")
+    values["LKH_NATIVE_MODE"] = "1"
     values["LKH_NATIVE_ADMIN_PORT"] = admin_port
     values["MCP_HOST"] = host
     values["MCP_PORT"] = port

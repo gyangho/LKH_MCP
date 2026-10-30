@@ -1,4 +1,4 @@
-name: Windows native server preview (I1)
+name: Windows native suite build (I1-I7 staging)
 on:
   push:
     branches: [refac]
@@ -11,6 +11,8 @@ on:
       - 'frontend/**'
       - 'branding/**'
       - 'requirements*.txt'
+      - 'installer/**'
+      - 'windows_agent/**'
       - '.github/workflows/windows-native.yaml'
   pull_request:
     paths:
@@ -45,12 +47,12 @@ jobs:
         run: |
           $env:PYTHONPATH = "src"
           python -m pip install -r requirements.txt
-          python -m unittest discover -s tests -t . -p test_native_runtime.py -v
+          python -m unittest discover -s tests -t . -p 'test_native_*.py' -v
       - name: Build unsigned native preview and check bundled assets
         shell: pwsh
         run: |
           $python = python -c "import sys; print(sys.executable)"
-          ./scripts/build-native-server.ps1 -Python $python
+          ./scripts/build-native-suite.ps1 -Python $python
       - name: Smoke-test actual loopback HTTP server
         shell: pwsh
         run: |
@@ -89,10 +91,30 @@ jobs:
           } finally {
             Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
           }
+      - name: Compile preview Installer (no installation)
+        shell: pwsh
+        run: |
+          $compiler = "C:\\Program Files (x86)\\Inno Setup 6\\ISCC.exe"
+          if (-not (Test-Path $compiler)) {
+            choco install innosetup --no-progress -y
+            if ($LASTEXITCODE -ne 0) { throw "Inno Setup installation failed" }
+          }
+          & $compiler "installer\\LKH-MCP.iss"
+          if ($LASTEXITCODE -ne 0) { throw "Inno Setup compile failed" }
+          if (-not (Test-Path "dist/installer/LKH-MCP-Setup-UNSIGNED.exe")) {
+            throw "Installer file missing"
+          }
+      - name: Upload unsigned installer (staging only)
+        uses: actions/upload-artifact@v4
+        with:
+          name: lkh-mcp-setup-unsigned-staging
+          path: dist/installer/*.exe
+          if-no-files-found: error
+          retention-days: 7
       - name: Upload unsigned preview bundle for inspection only
         uses: actions/upload-artifact@v4
         with:
-          name: lkh-mcp-native-preview-unsigned
+          name: lkh-mcp-native-server-preview-unsigned
           path: dist/LKH-MCP-Server/
           if-no-files-found: error
           retention-days: 7
