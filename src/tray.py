@@ -18,12 +18,15 @@ def _assets_dir() -> Path:
 
 
 def _dashboard_url() -> str:
-    url = os.getenv("ADMIN_PUBLIC_ORIGIN", "https://mcp.gyangho.com").strip()
+    url = os.getenv("ADMIN_PUBLIC_ORIGIN", "http://192.0.1.22:8001").strip()
     parsed = urlsplit(url)
-    if (parsed.scheme != "https" or not parsed.hostname or parsed.username
-            or parsed.password or parsed.path not in ("", "/")
+    if (parsed.scheme not in ("http", "https") or not parsed.hostname or parsed.port is None
+            or parsed.username or parsed.password or parsed.path not in ("", "/")
             or parsed.query or parsed.fragment):
-        raise ValueError("ADMIN_PUBLIC_ORIGIN은 HTTPS 호스트 URL이어야 합니다.")
+        raise ValueError("ADMIN_PUBLIC_ORIGIN에는 정확한 주소와 포트가 필요합니다.")
+    if parsed.scheme == "http" and parsed.hostname not in ("127.0.0.1", "localhost"):
+        import ipaddress
+        ipaddress.ip_address(parsed.hostname)
     return url.rstrip("/") + "/admin"
 
 

@@ -1,7 +1,7 @@
 """LKH MCP 0.0.1: Oracle, UI UX Pro Max, Graphify, Git, and admin console.
 
 Expose /mcp ONLY behind the existing Cloudflare MCP Portal/Access controls.
-Dashboard admin routes independently verify signed Cloudflare Access JWT.
+Dashboard admin routes use private administrator sessions, with WARP Access/Gateway as network layer.
 """
 import os
 import settings_store

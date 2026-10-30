@@ -1,3 +1,9 @@
+FROM node:22-alpine AS ui_build
+WORKDIR /frontend
+COPY frontend/package.json frontend/tsconfig.json frontend/vite.config.ts frontend/index.html ./
+COPY frontend/src ./src
+RUN npm install --no-audit --no-fund && npm run build
+
 FROM python:3.12-slim-bookworm
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 WORKDIR /app
@@ -8,6 +14,7 @@ RUN pip install --no-cache-dir -r /app/requirements.txt && pip install --no-cach
 COPY server.py /app/server.py
 COPY src /app/src
 COPY web /app/web
+COPY --from=ui_build /frontend/dist /app/web/dist
 COPY vendor /app/vendor
 RUN test -f /app/vendor/ui-ux-pro-max-skill/src/ui-ux-pro-max/scripts/search.py
 RUN groupadd -g 10001 mcp && useradd -m -u 10001 -g 10001 mcp \

@@ -4,6 +4,18 @@ on:
     branches: [main]
   pull_request:
 jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Build admin UI
+        working-directory: frontend
+        run: npm install --no-audit --no-fund && npm run build
   python:
     runs-on: ubuntu-latest
     permissions:
@@ -31,7 +43,7 @@ jobs:
       - name: Validate Docker Compose files
         run: |
           mkdir -p secrets
-          printf '{"ADMIN_CF_TEAM":"ci","ADMIN_CF_AUD":"ci","ADMIN_ALLOWED_EMAILS":"ci@example.test"}\n' > secrets/bootstrap.json
+          printf '{"ADMIN_LOGIN_USER":"ci","ADMIN_PASSWORD_HASH":"placeholder","ADMIN_PUBLIC_ORIGIN":"http://192.0.1.22:8001"}\n' > secrets/bootstrap.json
           printf 'ci-only-placeholder-0123456789abcdefgh\n' > secrets/codex_worker_token
           docker compose -f compose.yaml config --quiet
           docker compose -f compose.yaml -f compose.codex.yaml --profile codex config --quiet

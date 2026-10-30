@@ -122,7 +122,10 @@ def register_uiux_tools(mcp: Any) -> None:
         """Only for UI/UX implementation: search official stack-specific interface guidance (React, WPF, Next.js, etc.). Never use for unrelated programming or DB queries."""
         query = _check_query(query)
         if stack not in STACKS:
-            raise ValueError(f"지원하지 않는 stack입니다: {stack}. 사용 가능: {', '.join(sorted(STACKS))}")
+            return {"error": {"code": "UNSUPPORTED_STACK",
+                              "message": f"지원하지 않는 stack입니다: {stack}. 일반 HTML/CSS는 uiux_search를 사용하세요.",
+                              "supported_stacks": sorted(STACKS),
+                              "suggested_tool": "uiux_search" if stack == "html" else "uiux_stack_guidelines"}}
         if not isinstance(max_results, int) or not 1 <= max_results <= 10:
             raise ValueError("max_results는 1~10 사이 정수여야 합니다.")
         return _execute(query, "--stack", stack, "--max-results", str(max_results))

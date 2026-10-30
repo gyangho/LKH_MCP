@@ -1,7 +1,6 @@
-"""Cloudflare Access-protected, CSRF-checked Codex debugging approvals."""
+"""Private admin session protected, CSRF-checked Codex debugging approvals."""
 from __future__ import annotations
 import json
-import os
 import sys
 from pathlib import Path
 
@@ -10,14 +9,11 @@ from starlette.responses import HTMLResponse, JSONResponse
 from admin_console import (_verify_access, _auth_response, _private,
                            AdminNotConfigured, AdminUnauthorized)
 from codex_delegation import decide, list_tasks
+from admin_auth import valid_csrf
 
 
 def _csrf(request: Request):
-    origin = os.environ.get("ADMIN_PUBLIC_ORIGIN", "").rstrip("/")
-    return (origin.startswith("https://") and
-            request.headers.get("origin") == origin and
-            request.headers.get("x-lkh-admin-action") == "1" and
-            request.headers.get("content-type", "").split(";")[0].strip() == "application/json")
+    return valid_csrf(request)
 
 
 def register_codex_admin_routes(mcp):
@@ -26,9 +22,9 @@ def register_codex_admin_routes(mcp):
         try:
             _verify_access(request)
             path = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent.parent))
-            return _private(HTMLResponse((path / "web" / "codex.html").read_text(encoding="utf-8")))
+            return _private(HTMLResponse((path / "web" / "dist" / "index.html").read_text(encoding="utf-8")))
         except (AdminNotConfigured, AdminUnauthorized) as exc:
-            return _private(_auth_response(exc))
+            return _private(_auth_response(exc, request))
 
     @mcp.custom_route("/admin/api/codex/tasks", methods=["GET"])
     async def tasks(request: Request):
@@ -36,7 +32,7 @@ def register_codex_admin_routes(mcp):
             _verify_access(request)
             return _private(JSONResponse(list_tasks()))
         except (AdminNotConfigured, AdminUnauthorized) as exc:
-            return _private(_auth_response(exc))
+            return _private(_auth_response(exc, request))
 
     @mcp.custom_route("/admin/api/codex/decision", methods=["POST"])
     async def decision(request: Request):
@@ -55,6 +51,6 @@ def register_codex_admin_routes(mcp):
             result = decide(data["task_id"], data["action"], actor)
             return _private(JSONResponse(result))
         except (AdminNotConfigured, AdminUnauthorized) as exc:
-            return _private(_auth_response(exc))
+            return _private(_auth_response(exc, request))
         except (ValueError, TypeError, KeyError, json.JSONDecodeError):
             return _private(JSONResponse({"error": "invalid approval"}, status_code=400))

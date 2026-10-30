@@ -33,7 +33,7 @@ FIELDS = {
     "ORACLE_ALLOWED_TABLES": ("oracle", "조회 허용 테이블", "text", "", "쉼표 구분, 명시적 허용 목록"),
     "ORACLE_CLIENT_LIB_DIR": ("oracle", "Oracle Client 디렉터리", "text", "", "Thick 모드 사용 시 컨테이너 경로"),
 }
-SECRETS = frozenset({"ORACLE_PASSWORD", "ADMIN_CF_TEAM", "ADMIN_CF_AUD", "ADMIN_ALLOWED_EMAILS", "ADMIN_PUBLIC_ORIGIN"})
+SECRETS = frozenset({"ORACLE_PASSWORD", "ADMIN_CF_TEAM", "ADMIN_CF_AUD", "ADMIN_ALLOWED_EMAILS", "ADMIN_PUBLIC_ORIGIN", "ADMIN_PASSWORD_HASH", "ADMIN_LOGIN_USER"})
 _PATH_FIELDS = {"GIT_EXECUTABLE", "GRAPHIFY_EXECUTABLE", "ORACLE_CLIENT_LIB_DIR"}
 _BOOL_FIELDS = {key for key, item in FIELDS.items() if item[2] == "bool"}
 

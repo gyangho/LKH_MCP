@@ -1,192 +1,111 @@
-# Docker Compose · SQLite · Codex 승인 운영 가이드
+# LKH MCP · Docker, React Admin, WARP Private Access, SQLite, Codex
 
-## MCP 8000 / Admin 8001 포트 분리
+## Architecture and endpoint isolation
 
-LKH MCP Python 서버는 Docker 내부 포트 8000 한 개만 사용합니다.
-Nginx gateway만 호스트 포트를 게시하며 URL 경로를 제한합니다.
+| Destination | Purpose | Exposure |
+|---|---|---|
+| `192.0.1.22:8000/mcp` | Existing Cloudflare MCP Portal upstream | Private CIDR route |
+| `192.0.1.22:8000/admin` | Denied by Nginx | 404 |
+| `192.0.1.22:8001/admin` | React private admin interface | WARP Private Access + password/session |
+| `192.0.1.22:8001/admin/config` | Settings tab | Session required |
+| `192.0.1.22:8001/admin/codex` | Codex approvals | Session required |
+| `192.0.1.22:8001/mcp` | Denied by Nginx | 404 |
 
-- 192.0.1.22:8000/mcp: MCP Portal의 기존 Upstream (변경 없음)
-- 192.0.1.22:8000/admin: 차단 (HTTP 404)
-- 127.0.0.1:8001/admin: Cloudflare Access를 거친 관리자 화면
-- 127.0.0.1:8001/admin/config: SQLite 설정
-- 127.0.0.1:8001/admin/codex: Codex 승인
-- 127.0.0.1:8001/mcp: 차단 (HTTP 404)
-- /healthz: 백엔드 Docker 컨테이너 내부 헬스체크만 허용
+The backend runs on Docker port 8000 only. Nginx publishes the segregated gateway routes. Windows portproxy can forward `192.0.1.22:8001` to `127.0.0.1:8001`. The IP **must be assigned to a Windows adapter**. No external DNS hostname or public Cloudflare Tunnel is used for the admin interface. Do not add an unrestricted Windows firewall inbound rule.
 
-Windows에서 cloudflared가 실행 중인 경우 Cloudflare Tunnel의 관리자
-Published application 서비스 URL은 http://127.0.0.1:8001 로 변경하세요.
-Cloudflare Access 인증 정책 및 브라우저 URL
-https://mcp.gyangho.com/admin 은 변경하지 않습니다.
-Service URL 뒤에 /admin을 추가하지 마세요.
+## Mandatory Cloudflare access controls
 
-192.0.1.22는 반드시 Windows 호스트의 실제 NIC에 할당된 IP여야 합니다.
-CIDR Route만 등록했다고 해당 IP로 바인딩할 수 있는 것은 아닙니다.
-PowerShell에서 다음을 확인하세요.
+1. Keep the existing CIDR Route for the MCP Portal on port 8000.
+2. Create an **Access controls → Applications → Self-hosted and private** application for private IP `192.0.1.22`, TCP port `8001`. Enable client authentication via Cloudflare One Client and restrict Allow to your specific identity.
+3. Set a Gateway network policy for TCP 8001 that blocks other identities and devices. Merely joining the WARP organization does **not** authenticate an administrator.
+4. Remove any previous publicly reachable admin Published Application and revoke broad LAN/WAN access to 8001.
+5. Verify a permitted WARP user succeeds; a nonpermitted user fails at the network policy; an unauthenticated private HTTP visitor is redirected to /admin/login.
 
-    Get-NetIPAddress -IPAddress 192.0.1.22
+Policies and Windows firewall configuration must be applied **on the user environment**; updating source code does not create Cloudflare policies.
 
-만약 이 주소가 호스트에 할당되어 있지 않다면, compose.yaml의
-gateway 8000 포트 바인딩을 실제 호스트 IP로 수정하고 Portal의
-CIDR 라우팅도 그 IP에 연결되도록 조정해야 합니다.
-0.0.0.0에 게시하면 모든 네트워크 인터페이스에 노출되므로,
-Portal 출발지로 Windows 방화벽 접근 제한을 반드시 설정하세요.
+## Independent admin login
 
-기존 Windows MCP Python/EXE가 8000번 포트를 점유한다면
-Docker 시작 전에 종료하세요. 포트 충돌로 gateway가 시작되지 않습니다.
+The Python backend verifies a salted PBKDF2-SHA256 password hash and issues an unpredictable HttpOnly, SameSite=Strict, four-hour memory-backed cookie. Five bad logins in a 15-minute window block further attempts. Sessions are wiped on server restart; separate replicas would need shared server-side session storage.
 
-Windows PowerShell 검증 예시:
+Generate a 14+ character password hash locally:
 
-    docker compose ps
-    docker compose logs --tail=100 gateway
-    curl.exe -i http://192.0.1.22:8000/admin
-    curl.exe -i http://127.0.0.1:8001/mcp
-    curl.exe -i http://127.0.0.1:8001/admin
+```powershell
+python -c "import sys,getpass;sys.path.insert(0,'src');from admin_auth import make_password_hash;print(make_password_hash(getpass.getpass('Admin password: ')))"
+```
 
-첫 두 HTTP 테스트는 404여야 합니다.
-마지막 localhost 요청은 Cloudflare Access JWT를 전달하지 않기 때문에
-403 Access denied가 정상입니다. 503 Admin authentication not configured라면
-secrets/bootstrap.json 및 마운트 상태를 확인하세요.
-MCP 자체의 /mcp는 브라우저 GET 응답 코드만으로 연결 성공 여부를
-판정하지 마세요.
+Merge the following into your **existing untracked** `secrets/bootstrap.json`; do not overwrite Oracle credentials:
 
-관리자 포트를 외부 NIC에 게시하지 말고, 백엔드 8000 포트는
-호스트에 직접 게시하지 마세요. 게이트웨이의 MCP 포트에도
-별도의 인증 및 네트워크 접근 통제가 필요합니다.
+```json
+{
+  "ADMIN_LOGIN_USER": "admin",
+  "ADMIN_PASSWORD_HASH": "paste-generated-pbkdf2_sha256-hash",
+  "ADMIN_PUBLIC_ORIGIN": "http://192.0.1.22:8001"
+}
+```
 
+Avoid plain text passwords in Git, environment files or shell history. Old `ADMIN_CF_TEAM`, `ADMIN_CF_AUD` and `ADMIN_ALLOWED_EMAILS` settings are obsolete and should be removed from the local bootstrap JSON when upgrading. Secrets are never written into SQLite.
 
-## 환경변수 최소화
+**Important:** HTTP cookies cannot use the Secure attribute. Cloudflare's private transport protection, trusted LAN segregation, server-side CSRF `Origin + Host` validation and local Windows inbound firewall rules are all required; consider internal HTTPS for higher security. Admin GET views, status/config APIs, toggles and Codex approvals require the session. POST changes require `Origin`, `Host`, JSON content type and `X-LKH-Admin-Action`.
 
-기본 Compose에서 필요한 환경변수는 MCP_HOST=0.0.0.0 하나입니다.
-SQLite는 컨테이너 /app/data/mcp.sqlite3에 생성되고 Docker named volume
-mcp-data에 지속됩니다. 관리자 설정 화면: /admin/config.
+## React frontend
 
-SQLite 저장 설정:
-- Git 권한: GIT_ALLOW_COMMIT, GIT_ALLOW_PUSH, GIT_ALLOWED_REPOS, GIT_EXECUTABLE
-- Graphify: GRAPHIFY_ALLOW_UPDATE, GRAPHIFY_PROJECTS, GRAPHIFY_EXECUTABLE
-- Codex: CODEX_DELEGATION_ENABLED, CODEX_MAX_RUNS_PER_DAY
-- Oracle: HOST, PORT, SERVICE/SID, DSN, USER, ALLOWED_TABLES, CLIENT_LIB_DIR
+- Source: `frontend/` (React + TypeScript + Vite).
+- Build: `cd frontend; npm install; npm run build`.
+- Generated static output: `frontend/dist/`, copied to `/app/web/dist/` by Docker's Node builder stage.
+- The Python MCP server serves `/admin`, `/admin/login`, `/admin/config`, `/admin/codex` using one SPA, and `/admin/assets/*` for build assets.
+- **No standalone React server** is exposed. The legacy standalone HTML dashboards were removed.
+- Font: NanumSquare by NAVER, SIL Open Font License 1.1; see `frontend/NANUMSQUARE-LICENSE.md`. The CSS loads jsDelivr, with Malgun Gothic fallback.
 
-비밀값은 SQLite에 저장하지 않습니다. secrets/bootstrap.json
-(Docker secret /run/secrets/mcp_bootstrap)은 아래 키만 사용합니다.
-ORACLE_PASSWORD, ADMIN_CF_TEAM, ADMIN_CF_AUD, ADMIN_ALLOWED_EMAILS,
-ADMIN_PUBLIC_ORIGIN.
+For Windows EXE use `scripts/build-windows.ps1` which builds the React frontend before PyInstaller. Node/npm 22+ is required.
 
-MCP_DB_PATH와 MCP_BOOTSTRAP_FILE는 기본 경로를 바꿔야 할 때만
-설정합니다. 기존 Windows .env를 가진 경우 SQLite 최초 생성 시
-일반 설정을 불러옵니다. 그 이후에는 SQLite 값이 우선합니다.
+## Docker / Naru
 
-## Docker 실행
+```powershell
+git status --short
+git pull --ff-only origin main
+git submodule update --init --recursive
+docker --context naru compose -f compose.yaml config
+docker --context naru compose -f compose.yaml up -d --build
+docker --context naru compose -f compose.yaml ps
+docker --context naru compose -f compose.yaml logs --tail=100 gateway mcp
+```
 
-Windows PowerShell에서 다음을 실행합니다.
+Existing secrets and named volumes must be preserved. Do not run destructive `docker compose down -v`. For a clean portproxy listener check:
 
-    git status
-    git pull --ff-only origin main
-    git submodule update --init --recursive
-    Copy-Item secrets/bootstrap.example.json secrets/bootstrap.json
-    notepad secrets/bootstrap.json
-    docker compose up -d --build
-    docker compose ps
-    docker compose logs --tail=100 mcp
+```powershell
+Get-NetTCPConnection -State Listen -LocalPort 8001
+netsh interface portproxy show all
+curl.exe -i http://192.0.1.22:8001/admin
+```
 
-bootstrap.json은 gitignore에 제외되어 있습니다. 예제 값을 실제
-Cloudflare Access team, AUD, 관리자 이메일 및 Oracle 비밀번호로
-교체해야 합니다. Cloudflare Tunnel 관리자 origin은 Windows 기준 http://127.0.0.1:8001 입니다.
+An unauthenticated GET to /admin should return **303 to /admin/login**, not the old Cloudflare Access JWT 403. The React frontend may require internet access for jsDelivr font, but application assets are served locally.
 
-서비스 경로:
-- /mcp 기존 MCP
-- /healthz Docker 컨테이너 내부 헬스체크
-- /admin 모니터링
-- /admin/config SQLite 설정 페이지
-- /admin/codex Codex 승인 페이지
+## SQLite settings and worker restrictions
 
-Cloudflare Access JWT를 검증해야 관리 경로에 접근할 수 있습니다.
-Cloudflare Tunnel 연결 자체는 관리자 인증을 대체하지 않습니다.
+SQLite state is stored in `/app/data/mcp.sqlite3` on the `mcp-data` named volume. Settings live under `/admin/config`: Git allowlisted repos and flags; Graphify configuration; Codex opt-in and daily limits; Oracle connection (read-only). Oracle secrets must remain in bootstrap and must not be displayed by the UI.
 
-## 프로젝트 마운트
+To mount project working trees, create a local untracked `compose.override.yaml` specifying only approved source folders. Do not expose the Docker socket, Oracle credentials or GitHub PAT to the Codex worker.
 
-Docker는 Windows의 원본 소스 폴더를 자동으로 읽을 수 없습니다.
-로컬 전용 compose.override.yaml을 생성하고 등록한 경로만 마운트하세요.
+Codex worker is disabled by default. Create an internal authentication token at `secrets/codex_worker_token` then use:
 
-    services:
-      mcp:
-        volumes:
-          - "C:/Projects/ITAM:/projects/ITAM:rw"
-          - "C:/Projects/LKH_MCP:/projects/LKH_MCP:rw"
+```powershell
+python -c "import secrets,pathlib;pathlib.Path('secrets/codex_worker_token').write_text(secrets.token_hex(32),encoding='utf-8')"
+docker --context naru compose -f compose.yaml -f compose.codex.yaml --profile codex up -d --build
+```
 
-관리자 /admin/config 페이지에서 다음과 같이 설정합니다.
+The workflow is request debug → approve run → inspect result/diff → separately approve patch application. Git commit/push require additional explicit user authorization. No worker is allowed to receive Docker credentials, Oracle secrets or a writable Git source by default.
 
-    GRAPHIFY_PROJECTS=ITAM=/projects/ITAM;LKH_MCP=/projects/LKH_MCP
-    GIT_ALLOWED_REPOS=ITAM=gyangho/ITAM;LKH_MCP=gyangho/LKH_MCP
+## Verification
 
-실제 저장소 이름 및 경로에 맞춰 변경하세요. Git push에는 별도의
-비대화형 인증이 필요합니다. Docker socket이나 GitHub PAT를
-Codex worker에 마운트해서는 안 됩니다.
+```powershell
+cd frontend
+npm install
+npm run build
+cd ..
+python -m compileall -q src tests
+$env:PYTHONPATH='src'
+python -m unittest discover -s tests -t . -p 'test_*.py' -v
+docker --context naru compose -f compose.yaml config
+```
 
-Oracle 11g는 Linux용 Instant Client 19를 별도로 설치/마운트해야
-연결됩니다. Windows 호스트에 Oracle DB가 있을 때는 Oracle 주소를
-host.docker.internal로 지정할 수 있습니다. DB 계정은 SELECT 전용을
-권장하며 Oracle 포트를 외부에 공개하지 마세요.
-
-## Codex 디버깅 worker: 기본 비활성화
-
-Codex가 GitHub에 직접 쓰거나 신규 기능을 개발하지 못하도록
-별도 worker 컨테이너에서 승인된 소스 파일만 처리합니다.
-MCP SQLite, Oracle/Cloudflare secrets, Git 작업 트리는 worker에
-마운트하지 않습니다.
-
-1. Python으로 내부 인증 토큰 파일을 생성하세요.
-
-       python -c "import secrets,pathlib; pathlib.Path('secrets/codex_worker_token').write_text(secrets.token_hex(32),encoding='utf-8')"
-
-2. worker를 선택적으로 실행합니다.
-
-       docker compose -f compose.yaml -f compose.codex.yaml --profile codex up -d --build
-
-3. worker의 codex-auth 볼륨에 Codex CLI 인증을 설정하세요.
-   설치 버전의 codex login 또는 device-auth 절차를 사용합니다.
-   MCP 본체와 Codex 인증 정보를 공유하지 마세요.
-4. /admin/config에서 CODEX_DELEGATION_ENABLED=true, 일일 1~10회 제한을
-   설정합니다.
-5. ChatGPT가 codex_request_debug를 호출하면 pending 요청만 생성됩니다.
-6. /admin/codex에서 실제 사용자가 분석 실행을 승인합니다.
-7. 10분 이내 codex_run_approved를 호출하고 codex_get_task로 결과를
-   확인합니다. Codex는 별도 worker에서 최대 12개 허용 소스를 다룹니다.
-8. 최소 수정 diff가 올바르면 별도로 승인하고
-   codex_apply_approved_patch를 호출합니다.
-9. Git 커밋과 push는 ChatGPT와 사용자에게 다시 확인받은 후
-   기존 git_stage_paths / git_preview_commit / git_commit / git_push로 처리합니다.
-
-worker는 별도 Docker 이미지로 실행되며 포트를 호스트에 노출하지
-않습니다. Docker/Codex 샌드박스가 완전한 격리 장벽을 보장하지는
-않습니다. Linux sandbox 권한 문제 발생 시 우회 옵션으로 완화하지
-말고 worker 로그와 격리 구성을 점검하세요.
-
-## UI UX Pro Max 오류
-
-UIUX 도구가 Error executing tool을 반환하면 먼저
-uiux_diagnostics로 search_script_found와
-python_interpreter_available을 확인하세요. vendor의 검색 스크립트가
-없으면 이미 Docker 이미지 빌드에서 실패하게 설정했습니다.
-
-    git submodule update --init --recursive
-    docker compose logs --tail=200 mcp
-
-실제 서버 traceback 없이 오류 원인을 하나로 단정하지 마세요.
-
-## 확인·백업
-
-    docker compose config
-    docker compose build
-    docker compose up -d
-    docker compose exec mcp python -m compileall -q /app/src
-
-소스 개발 환경의 테스트 명령:
-
-    python -m unittest discover -s tests -t . -p "test_*.py" -v
-
-운영 이미지는 테스트 모듈을 포함하지 않습니다. SQLite DB 백업은
-온라인 백업 API를 사용하거나 컨테이너를 중지하고 복사하세요.
-실행 중에 WAL 파일을 제외한 단순 파일 복사는 안전하지 않습니다.
-
-이 문서는 운영 배포 절차입니다. 실제 Docker Desktop 및 Oracle,
-Codex 인증, Cloudflare Access 환경에서의 통합 테스트는 별도입니다.
+Back up SQLite with its backup API or after stopping the container; copying only a live WAL-backed file is unsafe. Confirm origin login/expiry/logout, CSRF rejection, Gateway denied identity, MCP `/mcp` transport and gateway 8000/8001 route isolation.

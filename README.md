@@ -65,10 +65,10 @@ must separately have SELECT rights on them.
 
 ## 5. Later: connect ChatGPT
 
-When local tests pass, provide a public HTTPS URL such as
-https://mcp.gyangho.com/mcp using Cloudflare Tunnel, and secure it with
-MCP-compatible authentication/authorization before enabling exposure. A Tunnel
-alone is NOT authorization. Keep the Oracle DB port private.
+After local verification, retain the existing Cloudflare MCP Portal private CIDR
+upstream: `http://192.0.1.22:8000/mcp`. Keep the Oracle DB port private.
+The administrator UI has its own WARP Private Access and password login on
+port 8001; do not publish a public admin Tunnel.
 
 ## 6. Graphify integration (existing code graphs + incremental refresh)
 
@@ -130,14 +130,14 @@ generated data. Only one refresh may run at a time; execution is capped at
 120 seconds. Larger repositories may need a local terminal refresh.
 
 When adding MCP tools:
-1. `git pull` on the Windows host and restart the existing MCP process.
+1. `git pull --ff-only origin main` on the Windows host, rebuild the Naru containers and restart the MCP process.
 2. Cloudflare Zero Trust → MCP Portals → Servers → LKH MCP → **Sync capabilities**.
 3. Allow only the Graphify tools you want visible from the portal.
 4. Run `graphify_list_projects` from ChatGPT and then a scoped graph query.
 
 **Security:** Graphify graph data can reveal internal code structure and source
 details. Only allowlist projects you are authorized to expose via ChatGPT.
-Your Cloudflare Access policy must remain restricted to you. The adapter
+Your Cloudflare MCP Portal access policy must remain restricted to you. The adapter
 forces `GRAPHIFY_BACKEND=none` to prevent accidental Graphify LLM/provider
 calls and disables Graphify query logs. It cannot enforce that the data already
 inside an existing graph has no secrets. Graph updates are disabled by default,
@@ -268,7 +268,8 @@ LKH_MCP/
 ├── branding/pig-terminal.png # approved CLI pig icon artwork (tracked)
 ├── scripts/generate_icon.py  # produce PNG and ICO from source
 ├── scripts/build-windows.ps1 # no-console EXE and embedded .ico
-├── web/dashboard.html        # admin UI
+├── frontend/                 # React + TypeScript + Vite admin source
+├── web/dist/                 # generated SPA (never commit; built in Docker)
 ├── docs/                     # operations guide
 └── vendor/                   # UI UX Pro Max submodule
 ```
@@ -298,11 +299,8 @@ Local secrets, build artifacts, runtime logs and generated icons are ignored.
 
 ## Docker MCP/Admin port isolation
 
-Docker Compose uses a single backend and an unprivileged Nginx gateway.
-192.0.1.22:8000 exposes only the MCP endpoint. 127.0.0.1:8001
-exposes only the Cloudflare Access-protected admin endpoints.
-The MCP Portal Upstream stays http://192.0.1.22:8000/mcp.
-When cloudflared runs on Windows, its admin origin becomes
-http://127.0.0.1:8001. The host must actually own 192.0.1.22;
-a CIDR route alone does not assign this address.
-Deployment details: docs/DOCKER_SQLITE_CODEX.md.
+The MCP gateway preserves **192.0.1.22:8000/mcp** for the existing Cloudflare MCP Portal private CIDR routing. Nginx exposes only MCP endpoints on 8000. The **8001/admin** private administration path requires **WARP Private Access/Gateway policy plus independent password login**. There is no Cloudflare Access JWT dependency or public admin Tunnel.
+
+Administrator UI: **React 19 + TypeScript + Vite**, served as built static files by the existing Python MCP backend. Docker builds the frontend in a separate Node stage; there is no browser-facing Node server. NanumSquare webfont is loaded from jsDelivr and falls back to Malgun Gothic; copyright/license: [frontend/NANUMSQUARE-LICENSE.md](frontend/NANUMSQUARE-LICENSE.md). Legacy HTML admin files have been removed.
+
+Administrator setup, security controls, Python tests, npm build, Naru deployment and Codex workflow: [docs/DOCKER_SQLITE_CODEX.md](docs/DOCKER_SQLITE_CODEX.md). Do not publish 8001 or create a broad Windows firewall inbound rule.

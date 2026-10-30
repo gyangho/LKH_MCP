@@ -50,6 +50,12 @@ class TestUiuxTools(unittest.TestCase):
         self.assertIn("--stack", result["args"])
         self.assertIn("react", result["args"])
 
+    def test_unsupported_stack_returns_actionable_error(self):
+        result = self.tools["uiux_stack_guidelines"]("admin", "html")
+        self.assertEqual(result["error"]["code"], "UNSUPPORTED_STACK")
+        self.assertEqual(result["error"]["suggested_tool"], "uiux_search")
+        self.assertIn("react", result["error"]["supported_stacks"])
+
     def test_design_system_is_read_only(self):
         result = self.tools["uiux_generate_design_system"]("SaaS dashboard", "ITAM")
         self.assertIn("--design-system", result["args"])

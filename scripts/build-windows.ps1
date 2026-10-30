@@ -3,6 +3,15 @@ param([string]$Python = ".\.venv\Scripts\python.exe")
 $ErrorActionPreference = "Stop"
 Set-Location (Split-Path -Parent $PSScriptRoot)
 if (!(Test-Path $Python)) { throw "Python interpreter not found" }
+# React static assets must exist before PyInstaller packages the web directory.
+if (!(Get-Command npm -ErrorAction SilentlyContinue)) { throw "Node.js/npm 22+ is required" }
+Push-Location frontend
+try {
+    & npm install --no-audit --no-fund
+    if ($LASTEXITCODE -ne 0) { throw "npm install failed" }
+    & npm run build
+    if ($LASTEXITCODE -ne 0) { throw "React build failed" }
+} finally { Pop-Location }
 $ver = (Select-String -Path src/version.py -Pattern 'VERSION = "([^"]+)"').Matches.Groups[1].Value
 & $Python -m pip install -r requirements.txt -r requirements-build.txt
 if ($LASTEXITCODE -ne 0) { throw "Dependency install failed" }
