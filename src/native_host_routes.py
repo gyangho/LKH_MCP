@@ -17,7 +17,32 @@ _LOCK = threading.Lock()
 _LAST_ACTION = 0.0
 
 
+def compute_tray_state(snapshot: dict, scheduler: str) -> dict:
+    """Pig green requires a *valid authenticated heartbeat*, not just task RUNNING."""
+    if scheduler == "unavailable":
+        return {"state": "unknown", "busy": False}
+    if scheduler != "running":
+        return {"state": "offline", "busy": False}
+    online = [a for a in snapshot.get("agents", []) if a.get("online") is True]
+    if not snapshot.get("enabled") or not snapshot.get("token_configured") or not online:
+        return {"state": "offline", "busy": False}
+    return {"state": "online", "busy": any(a.get("busy") is True for a in online)}
+
+
+
 def register_native_host_routes(mcp):
+    @mcp.custom_route("/admin/host/tray-state", methods=["GET"])
+    async def tray_status(request: Request):
+        # No admin cookie is available to the standalone login-session tray.
+        # Expose only state/busy, and only to the OS loopback client.
+        if request.client is None or request.client.host not in ("127.0.0.1", "::1"):
+            return _private(JSONResponse({"state": "unknown"}, status_code=403))
+        try:
+            state = compute_tray_state(agents_snapshot(), task_state())
+        except (OSError, RuntimeError, ValueError):
+            state = {"state": "unknown", "busy": False}
+        return _private(JSONResponse(state))
+
     @mcp.custom_route("/admin/api/host/services", methods=["GET"])
     async def services(request: Request):
         try:

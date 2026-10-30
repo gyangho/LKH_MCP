@@ -1,11 +1,12 @@
 """Separate Windows tray UI; never hosts MCP or exposes credentials.
 
 Pixel Pig is generated from the approved branding image. The local tray
-only reads loopback health + OS Scheduler state and invokes one fixed task.
+reads the server's loopback authenticated-heartbeat status and invokes one fixed task.
 The server continues if this user-session process exits.
 """
 from __future__ import annotations
 
+import json
 import os
 import sys
 import threading
@@ -13,7 +14,7 @@ import urllib.request
 import webbrowser
 from pathlib import Path
 
-from native_task_control import control_agent, task_state
+from native_task_control import control_agent
 
 
 def assets_dir() -> Path:
@@ -27,23 +28,18 @@ def _admin_base() -> str:
     return "http://127.0.0.1:" + port
 
 
-def server_healthy() -> bool:
-    try:
-        with urllib.request.urlopen(_admin_base() + "/admin/healthz", timeout=2) as result:
-            return result.status == 200
-    except (OSError, ValueError):
-        return False
-
-
 def status() -> str:
-    if not server_healthy():
+    """Read the server's live authenticated-heartbeat verdict, never scheduler alone."""
+    try:
+        with urllib.request.urlopen(_admin_base() + "/admin/host/tray-state",
+                                    timeout=2) as result:
+            if result.status != 200:
+                return "unknown"
+            payload = json.loads(result.read(512).decode("utf-8"))
+        state = payload.get("state") if isinstance(payload, dict) else None
+        return state if state in ("online", "offline", "unknown") else "unknown"
+    except (OSError, ValueError, TypeError, UnicodeError):
         return "unknown"
-    state = task_state()
-    if state == "running":
-        return "online"
-    if state in ("ready", "disabled", "queued"):
-        return "offline"
-    return "unknown"
 
 
 def run_tray() -> None:
@@ -62,7 +58,7 @@ def run_tray() -> None:
 
     done = threading.Event()
     icon = pystray.Icon("LKH_MCP", images["unknown"], "LKH MCP", menu=None)
-    label = {"online": "Agent 실행 중", "offline": "Agent 종료됨",
+    label = {"online": "Agent 연결됨", "offline": "Agent 연결 안 됨",
              "unknown": "상태 확인 불가"}
 
     def notice(message):
