@@ -191,6 +191,19 @@ export function OperationsPanel() {
       {error && <p className="error" role="alert">{error}</p>}
       <p>CPU {runtime?.cpu_percent ?? "—"}% · RSS {runtime?.memory_mb ?? "—"} MB ·
         Threads {runtime?.threads ?? "—"} · Uptime {runtime?.uptime_seconds ?? "—"}초</p>
+      <div role="img" aria-label="최근 60분 분당 요청량 막대 그래프"
+           style={{ height: 112, display: "flex", gap: 3, alignItems: "flex-end",
+                    overflowX: "auto", padding: "8px 0" }}>
+        {buckets.slice(-60).map(b => {
+          const max = Math.max(1, ...buckets.map(item => item.requests));
+          const height = Math.max(3, Math.round(96 * b.requests / max));
+          return <div key={b.minute}
+            title={new Date(b.minute * 1000).toLocaleTimeString("ko-KR") +
+              " · 요청 " + b.requests + "건, 오류 " + b.errors + "건"}
+            style={{ height, width: 10, minWidth: 7, borderRadius: 2,
+                     background: b.errors ? "#c87575" : "#638ba7" }} />;
+        })}
+      </div>
       <div className="table-wrap"><table><thead><tr><th>분</th><th>요청</th><th>오류</th><th>평균 ms</th></tr></thead>
         <tbody>{buckets.slice(-60).map(b => <tr key={b.minute}>
           <td>{new Date(b.minute * 1000).toLocaleTimeString("ko-KR")}</td>
