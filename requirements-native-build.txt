@@ -1,0 +1,2 @@
+# Windows-only packaging/runtime dependencies. Do not install in Docker.
+pywin32>=306,<400

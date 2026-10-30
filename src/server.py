@@ -12,7 +12,7 @@ from uiux_tools import register_uiux_tools
 from codex_bridge import register_codex_tools
 from codex_agent_routes import register_agent_routes
 from codex_admin import register_codex_admin_routes
-from runtime_state import initialize_state, instrument_tools
+from runtime_state import initialize_state, instrument_tools, instrument_routes
 from admin_console import register_routes
 
 initialize_state()
@@ -22,6 +22,7 @@ mcp = MCPServer(
     instructions="Oracle SELECT-only, UI UX guidance, scoped Graphify queries, and allowlisted Git tools. Privileged operations require local opt-in."
 )
 instrument_tools(mcp)
+instrument_routes(mcp)
 
 
 @mcp.tool()
@@ -46,7 +47,19 @@ register_uiux_tools(mcp)
 register_codex_tools(mcp)
 register_agent_routes(mcp)
 register_codex_admin_routes(mcp)
+from instruction_routes import register_instruction_tools, register_instruction_admin
+register_instruction_tools(mcp)
+register_instruction_admin(mcp)
+from operations_routes import register_operations_routes
+register_operations_routes(mcp)
 register_routes(mcp)
+
+# Native-only privileged APIs, never registered in the Docker deployment.
+if os.getenv("LKH_NATIVE_MODE") == "1":
+    from native_host_routes import register_native_host_routes
+    from native_enrollment_routes import register_native_enrollment_routes
+    register_native_host_routes(mcp)
+    register_native_enrollment_routes(mcp)
 
 
 def run() -> None:

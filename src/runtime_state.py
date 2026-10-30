@@ -56,7 +56,7 @@ def change_flag(key: str, value: bool, actor: str) -> dict:
 
 
 def _record(tool: str, status: str, *, duration_ms: int = 0,
-            detail: str = "", actor: str = "") -> None:
+            detail: str = "", actor: str = "", trace_id: str = "") -> None:
     global _LAST_ERROR
     with _LOCK:
         entry = {"time": datetime.now(timezone.utc).isoformat(), "tool": tool,
@@ -68,6 +68,14 @@ def _record(tool: str, status: str, *, duration_ms: int = 0,
         _HISTORY.appendleft(entry)
         if status == "error":
             _LAST_ERROR = f"{tool} failed at {entry['time']}"
+    # Never store detail, actor, arguments, exception messages or raw tool output.
+    try:
+        from operations_store import record
+        record("http" if tool.startswith("api_") else "tool",
+               tool[4:] if tool.startswith("api_") else tool,
+               status, max(0, int(duration_ms)), trace_id=trace_id)
+    except (OSError, ValueError, RuntimeError, __import__("sqlite3").Error):
+        pass  # Local metrics must not alter the outcome of a tool call.
 
 
 def _begin(name: str) -> str:
@@ -88,7 +96,7 @@ def _finish(ident: str, name: str, result: Any = None, error: bool = False) -> N
             error = True
         if error:
             _COUNTERS["failed"] += 1
-        _record(name, "error" if error else "success", duration_ms=millis)
+        _record(name, "error" if error else "success", duration_ms=millis, trace_id=ident)
 
 
 def instrument_tools(mcp: Any) -> None:
@@ -125,6 +133,33 @@ def instrument_tools(mcp: Any) -> None:
             return decorator(tracked)
         return register
     mcp.tool = monitored_tool
+
+
+def instrument_routes(mcp: Any) -> None:
+    """Measure admin endpoint status and latency without storing URL/body/headers."""
+    original = mcp.custom_route
+
+    def monitored_route(*a: Any, **kw: Any):
+        decorator = original(*a, **kw)
+
+        def wrap(fn):
+            @functools.wraps(fn)
+            async def tracked(request):
+                started = time.monotonic()
+                correlation = uuid.uuid4().hex
+                status = "error"
+                try:
+                    response = await fn(request)
+                    response.headers["X-Correlation-ID"] = correlation
+                    status = "success" if response.status_code < 400 else "error"
+                    return response
+                finally:
+                    millis = min(3600000, max(0, int((time.monotonic() - started) * 1000)))
+                    _record("api_" + fn.__name__, status, duration_ms=millis, trace_id=correlation)
+            return decorator(tracked)
+        return wrap
+
+    mcp.custom_route = monitored_route
 
 
 def telemetry() -> dict[str, Any]:

@@ -29,6 +29,19 @@ def generate(output_dir: Path | None = None) -> tuple[Path, Path]:
     ico_path = folder / "lkh-mcp.ico"
     icon.save(png_path, format="PNG", optimize=True)
     icon.save(ico_path, format="ICO", sizes=ICON_SIZES)
+    # Same approved Pixel Pig pixels: alter its palette only. Preserve alpha and silhouette.
+    palette = {"online": (31, 182, 101), "offline": (239, 86, 153),
+               "unknown": (135, 145, 157)}
+    for state, tint in palette.items():
+        variant = icon.copy()
+        pixels = []
+        for red, green, blue, alpha in icon.getdata():
+            luminance = (red * 299 + green * 587 + blue * 114) // 1000
+            factor = 0.17 + 0.83 * luminance / 255
+            pixels.append((int(tint[0] * factor), int(tint[1] * factor),
+                           int(tint[2] * factor), alpha))
+        variant.putdata(pixels)
+        variant.save(folder / ("pig-" + state + ".png"), format="PNG", optimize=True)
     return png_path, ico_path
 
 
