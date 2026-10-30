@@ -12,6 +12,7 @@ from admin_console import (_verify_access, _auth_response, _private,
 from admin_auth import valid_csrf
 from codex_bridge import decide, list_tasks
 from codex_presence import agents_snapshot
+import codex_credentials
 
 
 def register_codex_admin_routes(mcp):
@@ -39,6 +40,50 @@ def register_codex_admin_routes(mcp):
             return _private(JSONResponse(agents_snapshot()))
         except (AdminNotConfigured, AdminUnauthorized) as exc:
             return _private(_auth_response(exc, request))
+
+    @mcp.custom_route('/admin/api/codex/token', methods=['GET'])
+    async def token_status(request: Request):
+        try:
+            _verify_access(request)
+            return _private(JSONResponse(codex_credentials.status()))
+        except (AdminNotConfigured, AdminUnauthorized) as exc:
+            return _private(_auth_response(exc, request))
+
+    @mcp.custom_route('/admin/api/codex/token/rotate', methods=['POST'])
+    async def token_rotate(request: Request):
+        try:
+            actor = _verify_access(request)
+            if not valid_csrf(request):
+                return _private(JSONResponse({'error': 'origin/CSRF check failed'}, status_code=403))
+            raw = await request.body()
+            if not 1 <= len(raw) <= 256:
+                return _private(JSONResponse({'error': 'invalid body size'}, status_code=413))
+            obj = json.loads(raw)
+            if not isinstance(obj, dict) or obj != {'confirm': 'ROTATE'}:
+                raise ValueError('Confirmation required')
+            return _private(JSONResponse(codex_credentials.rotate(actor)))
+        except (AdminNotConfigured, AdminUnauthorized) as exc:
+            return _private(_auth_response(exc, request))
+        except (ValueError, TypeError, json.JSONDecodeError):
+            return _private(JSONResponse({'error': 'invalid rotation request'}, status_code=400))
+
+    @mcp.custom_route('/admin/api/codex/token/revoke', methods=['POST'])
+    async def token_revoke(request: Request):
+        try:
+            actor = _verify_access(request)
+            if not valid_csrf(request):
+                return _private(JSONResponse({'error': 'origin/CSRF check failed'}, status_code=403))
+            raw = await request.body()
+            if not 1 <= len(raw) <= 256:
+                return _private(JSONResponse({'error': 'invalid body size'}, status_code=413))
+            obj = json.loads(raw)
+            if not isinstance(obj, dict) or obj != {'confirm': 'REVOKE'}:
+                raise ValueError('Confirmation required')
+            return _private(JSONResponse(codex_credentials.revoke(actor)))
+        except (AdminNotConfigured, AdminUnauthorized) as exc:
+            return _private(_auth_response(exc, request))
+        except (ValueError, TypeError, json.JSONDecodeError):
+            return _private(JSONResponse({'error': 'invalid revoke request'}, status_code=400))
 
     @mcp.custom_route('/admin/api/codex/decision', methods=['POST'])
     async def decision(request: Request):

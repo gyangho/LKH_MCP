@@ -68,6 +68,7 @@ Desktop.ini
 /secrets/bootstrap.json
 /secrets/codex_worker_token
 /windows_agent/config.json
+/windows_agent/token.json
 frontend/node_modules/
 frontend/dist/
 /compose.override.yaml
