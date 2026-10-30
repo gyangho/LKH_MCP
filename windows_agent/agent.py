@@ -30,7 +30,7 @@ _OWNER_REPO = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 
 def safe_env() -> dict[str, str]:
     """Only pass minimal Windows login/CLI paths to untrusted test commands."""
-    keep = {"PATH", "PATHEXT", "SYSTEMROOT", "WINDIR", "TEMP", "TMP", "TMPDIR",
+    keep = {"PATH", "PATHEXT", "SYSTEMROOT", "SYSTEMDRIVE", "WINDIR", "TEMP", "TMP", "TMPDIR",
             "USERPROFILE", "HOME", "APPDATA", "LOCALAPPDATA", "PROGRAMDATA",
             "COMSPEC", "HOMEDRIVE", "HOMEPATH", "LANG", "LC_ALL", "SSH_AUTH_SOCK",
             "GIT_TERMINAL_PROMPT", "GCM_INTERACTIVE", "CODEX_HOME"}

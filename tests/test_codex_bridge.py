@@ -110,6 +110,18 @@ class WindowsAgentTests(unittest.TestCase):
         from windows_agent import agent
         self.agent = agent
 
+    def test_safe_env_preserves_windows_system_drive_without_secrets(self):
+        # MXC needs host SystemDrive to start Windows child commands.
+        with patch.dict(os.environ, {
+            'SystemDrive': 'C:',
+            'CODEX_AGENT_TOKEN': 'never-expose-token',
+            'LKH_CODEX_AGENT_TOKEN': 'never-expose-agent-token',
+        }):
+            env = self.agent.safe_env()
+        self.assertEqual(env.get('SystemDrive'), 'C:')
+        self.assertNotIn('CODEX_AGENT_TOKEN', env)
+        self.assertNotIn('LKH_CODEX_AGENT_TOKEN', env)
+
     def test_safe_pull_rejects_sha_mismatch(self):
         git_results = iter(['', 'b'*40])
         with patch.object(self.agent, 'checked_repo'), patch.object(self.agent, 'git', side_effect=lambda *a, **kw: next(git_results)):
