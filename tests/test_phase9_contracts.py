@@ -31,7 +31,7 @@ class SkillContractTests(unittest.TestCase):
             self.assertIn(f"| **{phase}** ", roadmap)
             self.assertIn(f"| {phase} |", ledger)
         self.assertIn("cutover", ledger.lower())
-        self.assertIn("not production", ledger.lower())
+        self.assertIn("not been modified", ledger.lower())
 
 
 if __name__ == "__main__":
