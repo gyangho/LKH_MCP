@@ -130,6 +130,25 @@ jobs:
               & $svc remove
             }
           }
+      - name: Register fixed Agent and Pig Tray tasks on ephemeral runner
+        shell: pwsh
+        run: |
+          $agentUser = "$env:USERDOMAIN\\$env:USERNAME"
+          $registered = $false
+          try {
+            ./scripts/install-agent-task.ps1 -InstallDir "$PWD/dist" -AgentUser $agentUser
+            $registered = $true
+            if (-not (Get-ScheduledTask -TaskName "LKH-Codex-Agent" -ErrorAction Stop)) {
+              throw "Agent task not registered"
+            }
+            if (-not (Get-ScheduledTask -TaskName "LKH-MCP-Tray" -ErrorAction Stop)) {
+              throw "Tray logon task not registered"
+            }
+          } finally {
+            foreach ($task in @("LKH-Codex-Agent", "LKH-MCP-Tray")) {
+              Unregister-ScheduledTask -TaskName $task -Confirm:$false -ErrorAction SilentlyContinue
+            }
+          }
       - name: Compile preview Installer (no installation)
         shell: pwsh
         run: |
