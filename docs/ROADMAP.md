@@ -21,7 +21,7 @@
 | GitHub→Windows Codex 작업 큐 | **IMPLEMENTED** | 정확한 SHA/레포 allowlist/lease/fix 관리자 승인/Graphify snapshot. 실 Windows 전체 테스트 잔여 |
 | 기존 PyInstaller·Tray 시제품 | **IMPLEMENTED (prototype)** | `scripts/build-windows.ps1`, `src/server_launcher.py`·`src/tray.py` 존재. 서비스·독립 트레이·Installer 아님 |
 | I0–I7 | **I0–I7 IN_PROGRESS (staging code; Windows 실기·출시 미검증)** | I0 분석, I1 dual route, I2 SCM, I3 Task, I4 Pig, I5 DPAPI enrollment, I6 unsigned Inno staging, I7 SQLite backup 코드는 존재; 개별 Windows 서비스 설치·실기·보안 및 컷오버 미검증 |
-| Phase 1–9 | **NOT_STARTED** | 기초 관리 UI/telemetry 일부 존재하나 해당 단계 완료 기준 미달 |
+| Phase 1–9 | **IN_PROGRESS (refac 코드 구현, CI·실기 검증 분리)** | 이벤트·지침·운영 로그·메트릭·React UI·Skill 작업을 refac에 추가. 각 Phase의 코드와 CI 및 현장 E2E 결과는 [진행 증빙](PHASES_1_9_STATUS.md) 참조 |
 | Agent 자동 토큰 등록 | **NOT_STARTED** | 관리 UI 일회성 토큰 복사 PR #5는 요구 불일치로 PR #6 revert |
 
 ## 트랙 A 첫 구현: refac 브랜치 (I0/I1 진행 중)
@@ -50,6 +50,10 @@
 | **I7** 컷오버 | Docker 볼륨 SQLite 일관 백업, Native 스테이징·데이터 이전·URL/Firewall/Cloudflare 검증·롤백 리허설 | 운영 DB 건수/감사·Graph SHA 비교, Native E2E, **별도 운영 전환 승인** |
 
 I 트랙 기본 선행: `I0→I1→I2→I3→I4→I5→I6→I7`. I5 인증 설계는 I2/I3와 병렬 검토 가능하나 완성된 Installer에는 반드시 포함.
+
+## 트랙 B Phase 1–9 개발 변경사항
+
+`refac`에 Phase 1 JSONL 이벤트 원장과 Phase 2 실시간 조회 UI, Phase 3 실패 격리, Phase 4–6 지침의 버전·승인 발행·MCP 조회, Phase 7–8 구조화 로그·리소스 지표, Phase 9 개발 Skill과 회귀 테스트를 단계별로 추가했다. **운영 E2E 배포는 사용자가 검증할 수 있는 시점까지 보류**하고, CI 실패는 완료로 처리하지 않는다. 자세한 구현·차단·릴리스 증거는 [PHASES_1_9_STATUS](PHASES_1_9_STATUS.md).
 
 ## B 트랙: MCP 기능 Phase 0–9
 

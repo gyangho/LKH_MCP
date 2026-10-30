@@ -68,6 +68,12 @@ def _record(tool: str, status: str, *, duration_ms: int = 0,
         _HISTORY.appendleft(entry)
         if status == "error":
             _LAST_ERROR = f"{tool} failed at {entry['time']}"
+    # Never store detail, actor, arguments, exception messages or raw tool output.
+    try:
+        from operations_store import record
+        record("tool", tool, status, max(0, int(duration_ms)))
+    except (OSError, ValueError, RuntimeError, __import__("sqlite3").Error):
+        pass  # Local metrics must not alter the outcome of a tool call.
 
 
 def _begin(name: str) -> str:

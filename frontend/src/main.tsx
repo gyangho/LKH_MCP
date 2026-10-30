@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import "./style.css";
+import { CodexEventStream, InstructionsPanel, OperationsPanel } from "./phase_panels";
 
-type Page = "overview" | "tools" | "config" | "codex";
+type Page = "overview" | "tools" | "config" | "codex" | "instructions" | "operations";
 type SettingsItem = {
   key: string;
   category: string;
@@ -77,7 +78,9 @@ type Status = {
   server_time?: string;
 };
 const currentPage = (): Page =>
-  location.pathname.includes("/codex")
+  location.pathname.includes("/instructions") ? "instructions"
+    : location.pathname.includes("/operations") ? "operations"
+    : location.pathname.includes("/codex")
     ? "codex"
     : location.pathname.includes("/config")
       ? "config"
@@ -87,12 +90,16 @@ const labels: Record<Page, string> = {
   tools: "도구 권한",
   config: "환경 설정",
   codex: "Codex 관리",
+  instructions: "MCP 지침 관리",
+  operations: "로그·리소스 관측",
 };
 const paths: Record<Page, string> = {
   overview: "/admin",
   tools: "/admin?view=tools",
   config: "/admin/config",
   codex: "/admin/codex",
+  instructions: "/admin/instructions",
+  operations: "/admin/operations",
 };
 const categories: Record<string, string> = {
   git: "Git",
@@ -648,6 +655,7 @@ function Codex({
                 </details>
               )}
               {t.error && <p className="error">{t.error}</p>}
+              <CodexEventStream taskId={t.id} />
               <div className="actions">
                 {t.state === "pending_approval" && (
                   <>
@@ -845,6 +853,10 @@ function App() {
             secret={secret}
             refresh={() => void refresh()}
           />
+        ) : page === "instructions" ? (
+          <InstructionsPanel />
+        ) : page === "operations" ? (
+          <OperationsPanel />
         ) : (
           <Codex tasks={tasks} agents={agents} nativeHost={nativeHost}
             nativeEnrollment={nativeEnrollment} refresh={() => void refresh()} />

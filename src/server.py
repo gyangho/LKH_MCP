@@ -46,6 +46,11 @@ register_uiux_tools(mcp)
 register_codex_tools(mcp)
 register_agent_routes(mcp)
 register_codex_admin_routes(mcp)
+from instruction_routes import register_instruction_tools, register_instruction_admin
+register_instruction_tools(mcp)
+register_instruction_admin(mcp)
+from operations_routes import register_operations_routes
+register_operations_routes(mcp)
 register_routes(mcp)
 
 # Native-only privileged APIs, never registered in the Docker deployment.
