@@ -47,6 +47,8 @@ def prepare_native_environment(
     port = values.get("MCP_PORT") or _PREVIEW_PORT
     if not port.isdecimal() or not 1 <= int(port) <= 65535:
         raise ValueError("Invalid MCP_PORT")
+    if port in {"8000", "8001"}:
+        raise ValueError("Native preview cannot reuse the live Docker gateway ports 8000/8001")
     values["MCP_HOST"] = host
     values["MCP_PORT"] = port
     database = values.get("MCP_DB_PATH")

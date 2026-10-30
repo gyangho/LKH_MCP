@@ -59,7 +59,7 @@ class NativeRuntimeTests(unittest.TestCase):
                 native_runtime.prepare_native_environment({key: val}, root=self.root)
 
     def test_port_validation(self):
-        for p in ("0", "65536", "-1", "not-a-port", "8000;evil"):
+        for p in ("0", "65536", "-1", "not-a-port", "8000;evil", "8000", "8001"):
             with self.subTest(port=p), self.assertRaises(ValueError):
                 native_runtime.prepare_native_environment({"MCP_PORT": p}, root=self.root)
 

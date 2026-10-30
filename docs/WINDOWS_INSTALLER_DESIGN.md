@@ -52,3 +52,25 @@ Tooltip·메뉴에 색과 별개로 상태(Online/Offline/Unknown/Busy/Error), �
 - 업데이트: 변경 전 백업→서비스 drain→바이너리 교체→스키마 호환 검증→헬스→실패 시 롤백.
 - 제거: SC 서비스·등록 Task·트레이/바이너리 삭제, ProgramData DB/사용자 설정/감사 로그는 **기본 보존**; 완전 삭제는 별도 명시 선택. Cloudflare/Oracle 시스템 자동 삭제하지 않음.
 - v1 Installer 출시 전에 Docker 동일 MCP/Admin 기능/보안 격리/Oracle/SQLite/Cloudflare를 독립 E2E로 검증하고 관리자 운영 cutover 승인 수령.
+
+## I1 Preview implementation (refac; incomplete, no production deployment)
+
+Current source: `src/native_server.py` + `src/native_runtime.py`; build: `scripts/build-native-server.ps1`. This is a **headless preview**, not `LKH-MCP-Server` SCM service, Installer or deployed reverse proxy.
+
+```powershell
+# Windows development machine, clean repo with initialized vendor submodule
+git submodule update --init --recursive
+.\scripts\build-native-server.ps1
+# A bundle exists at dist\LKH-MCP-Server\LKH-MCP-Server.exe
+.\dist\LKH-MCP-Server\LKH-MCP-Server.exe --check
+
+# Use a scratch state folder, not the Docker named volume:
+$env:LKH_NATIVE_STATE_DIR = Join-Path $env:TEMP "lkh-mcp-native-staging"
+.\dist\LKH-MCP-Server\LKH-MCP-Server.exe
+```
+
+Default bind is `127.0.0.1:18080` and **live 8000/8001 ports are rejected in preview**. Do not set `MCP_HOST=0.0.0.0`; the runtime rejects non-loopback. Server state is separate in `%ProgramData%\LKH-MCP\data` unless `LKH_NATIVE_STATE_DIR` specifies an absolute staging directory. `MCP_DB_PATH` and `MCP_BOOTSTRAP_FILE` can be explicit absolute paths, but avoid pointing at operational data. If no bootstrap is configured, admin remains unconfigured; the preview **does not create or retrieve administrator secrets**.
+
+The check command validates packaged React `web/dist/index.html` and vendor UI/UX script, **not** actual authentication/Oracle/Cloudflare or Windows service startup. Existing `src/uiux_tools.py` requires an externally installed Python interpreter via `UIUX_PYTHON_EXECUTABLE` when frozen; parity remains blocked until a future audited solution. Oracle 11g needs compatible local Instant Client/Thick mode and real tests. Keep Docker gateway running.
+
+Windows CI builds this unsigned preview and smoke-tests asset inclusion/loopback HTTP. **Do not distribute this as an approved Installer**; I1 completion still needs cross-port ACL/HTTP route isolation and Oracle/UIUX parity verification.

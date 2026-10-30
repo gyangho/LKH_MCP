@@ -51,6 +51,31 @@ jobs:
         run: |
           $python = python -c "import sys; print(sys.executable)"
           ./scripts/build-native-server.ps1 -Python $python
+      - name: Smoke-test actual loopback HTTP server
+        shell: pwsh
+        run: |
+          $env:LKH_NATIVE_STATE_DIR = Join-Path $env:RUNNER_TEMP "lkh-mcp-native-smoke"
+          $env:MCP_HOST = "127.0.0.1"
+          $env:MCP_PORT = "18080"
+          $exe = Join-Path $PWD "dist/LKH-MCP-Server/LKH-MCP-Server.exe"
+          $proc = Start-Process -FilePath $exe -PassThru
+          try {
+            $healthy = $false
+            for ($i = 0; $i -lt 40; $i++) {
+              if ($proc.HasExited) { throw "Native server exited before becoming healthy" }
+              try {
+                $res = Invoke-WebRequest -Uri "http://127.0.0.1:18080/healthz" -TimeoutSec 2 -UseBasicParsing
+                if ($res.StatusCode -eq 200) { $healthy = $true; break }
+              } catch { }
+              Start-Sleep -Milliseconds 500
+            }
+            if (-not $healthy) { throw "Native loopback HTTP healthcheck failed" }
+            if (-not (Test-Path "$env:LKH_NATIVE_STATE_DIR/data/mcp.sqlite3")) {
+              throw "Native staging SQLite was not initialized"
+            }
+          } finally {
+            Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+          }
       - name: Upload unsigned preview bundle for inspection only
         uses: actions/upload-artifact@v4
         with:
