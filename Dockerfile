@@ -10,10 +10,9 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates libaio1 libnsl2 \
     && rm -rf /var/lib/apt/lists/*
 COPY requirements.txt /app/requirements.txt
-RUN pip install --no-cache-dir -r /app/requirements.txt && pip install --no-cache-dir graphifyy
+RUN pip install --no-cache-dir -r /app/requirements.txt
 COPY server.py /app/server.py
 COPY src /app/src
-COPY web /app/web
 COPY --from=ui_build /frontend/dist /app/web/dist
 COPY vendor /app/vendor
 RUN test -f /app/vendor/ui-ux-pro-max-skill/src/ui-ux-pro-max/scripts/search.py
