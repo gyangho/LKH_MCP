@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 async function secureApi<T>(url: string, body?: unknown): Promise<T> {
   const response = await fetch(url, {

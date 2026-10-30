@@ -28,7 +28,7 @@ class SkillContractTests(unittest.TestCase):
         roadmap = (ROOT / "docs" / "ROADMAP.md").read_text(encoding="utf-8")
         ledger = (ROOT / "docs" / "PHASES_1_9_STATUS.md").read_text(encoding="utf-8")
         for phase in range(1, 10):
-            self.assertIn(f"Phase {phase}", roadmap)
+            self.assertIn(f"| **{phase}** ", roadmap)
             self.assertIn(f"| {phase} |", ledger)
         self.assertIn("cutover", ledger.lower())
         self.assertIn("not production", ledger.lower())
