@@ -11,6 +11,7 @@ from admin_console import (_verify_access, _auth_response, _private,
                            AdminNotConfigured, AdminUnauthorized)
 from admin_auth import valid_csrf
 from codex_bridge import decide, list_tasks
+from codex_presence import agents_snapshot
 
 
 def register_codex_admin_routes(mcp):
@@ -28,6 +29,14 @@ def register_codex_admin_routes(mcp):
         try:
             _verify_access(request)
             return _private(JSONResponse(list_tasks()))
+        except (AdminNotConfigured, AdminUnauthorized) as exc:
+            return _private(_auth_response(exc, request))
+
+    @mcp.custom_route('/admin/api/codex/agents', methods=['GET'])
+    async def agents(request: Request):
+        try:
+            _verify_access(request)
+            return _private(JSONResponse(agents_snapshot()))
         except (AdminNotConfigured, AdminUnauthorized) as exc:
             return _private(_auth_response(exc, request))
 
