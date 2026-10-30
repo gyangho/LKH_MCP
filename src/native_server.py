@@ -36,8 +36,12 @@ def main(argv: list[str] | None = None) -> int:
         handlers=[logging.FileHandler(state / "logs" / "server.log", encoding="utf-8")],
     )
     logging.info("Native preview starting (loopback only); not a Windows Service")
-    from server import run
-    run()
+    import asyncio
+    from server import mcp
+    from native_gateway import run_native_gateways
+    asyncio.run(run_native_gateways(
+        mcp, host=os.environ["MCP_HOST"], mcp_port=int(os.environ["MCP_PORT"]),
+        admin_port=int(os.environ["LKH_NATIVE_ADMIN_PORT"])))
     return 0
 
 

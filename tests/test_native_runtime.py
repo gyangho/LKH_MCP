@@ -20,6 +20,7 @@ class NativeRuntimeTests(unittest.TestCase):
         self.assertEqual(root, self.root)
         self.assertEqual(self.env["MCP_HOST"], "127.0.0.1")
         self.assertEqual(self.env["MCP_PORT"], "18080")
+        self.assertEqual(self.env["LKH_NATIVE_ADMIN_PORT"], "18081")
         self.assertEqual(self.env["MCP_DB_PATH"], str(self.root / "data" / "mcp.sqlite3"))
         self.assertTrue((self.root / "logs").is_dir())
         self.assertTrue((self.root / "data").is_dir())
@@ -62,6 +63,14 @@ class NativeRuntimeTests(unittest.TestCase):
         for p in ("0", "65536", "-1", "not-a-port", "8000;evil", "8000", "8001"):
             with self.subTest(port=p), self.assertRaises(ValueError):
                 native_runtime.prepare_native_environment({"MCP_PORT": p}, root=self.root)
+
+    def test_native_admin_port_is_distinct_and_private(self):
+        for invalid in ("18080", "8000", "8001", "0", "65536", "xyz"):
+            with self.subTest(port=invalid), self.assertRaises(ValueError):
+                native_runtime.prepare_native_environment(
+                    {"LKH_NATIVE_ADMIN_PORT": invalid}, root=self.root)
+        native_runtime.prepare_native_environment(
+            {"LKH_NATIVE_ADMIN_PORT": "19001"}, root=self.root)
 
     def test_asset_checks_are_explicit(self):
         self.assertEqual(native_runtime.required_assets(self.root),

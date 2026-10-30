@@ -49,6 +49,12 @@ def prepare_native_environment(
         raise ValueError("Invalid MCP_PORT")
     if port in {"8000", "8001"}:
         raise ValueError("Native preview cannot reuse the live Docker gateway ports 8000/8001")
+    admin_port = values.get("LKH_NATIVE_ADMIN_PORT") or "18081"
+    if not admin_port.isdecimal() or not 1 <= int(admin_port) <= 65535:
+        raise ValueError("Invalid native admin port")
+    if admin_port in {"8000", "8001"} or port == admin_port:
+        raise ValueError("Preview ports must be distinct and cannot use live Docker ports")
+    values["LKH_NATIVE_ADMIN_PORT"] = admin_port
     values["MCP_HOST"] = host
     values["MCP_PORT"] = port
     database = values.get("MCP_DB_PATH")

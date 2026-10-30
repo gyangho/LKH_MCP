@@ -57,6 +57,7 @@ jobs:
           $env:LKH_NATIVE_STATE_DIR = Join-Path $env:RUNNER_TEMP "lkh-mcp-native-smoke"
           $env:MCP_HOST = "127.0.0.1"
           $env:MCP_PORT = "18080"
+          $env:LKH_NATIVE_ADMIN_PORT = "18081"
           $exe = Join-Path $PWD "dist/LKH-MCP-Server/LKH-MCP-Server.exe"
           $proc = Start-Process -FilePath $exe -PassThru
           try {
@@ -64,12 +65,24 @@ jobs:
             for ($i = 0; $i -lt 40; $i++) {
               if ($proc.HasExited) { throw "Native server exited before becoming healthy" }
               try {
-                $res = Invoke-WebRequest -Uri "http://127.0.0.1:18080/healthz" -TimeoutSec 2 -UseBasicParsing
+                $res = Invoke-WebRequest -Uri "http://127.0.0.1:18081/admin/healthz" -TimeoutSec 2 -UseBasicParsing
                 if ($res.StatusCode -eq 200) { $healthy = $true; break }
               } catch { }
               Start-Sleep -Milliseconds 500
             }
             if (-not $healthy) { throw "Native loopback HTTP healthcheck failed" }
+            foreach ($entry in @(
+              @{Port=18080; Path="/admin"; Expected=404},
+              @{Port=18080; Path="/admin/api/codex/tasks"; Expected=404},
+              @{Port=18081; Path="/mcp"; Expected=404},
+              @{Port=18081; Path="/administer"; Expected=404}
+            )) {
+              $uri = "http://127.0.0.1:$($entry.Port)$($entry.Path)"
+              $status = 0
+              try { $status = (Invoke-WebRequest $uri -UseBasicParsing -TimeoutSec 3).StatusCode }
+              catch { $status = [int]$_.Exception.Response.StatusCode }
+              if ($status -ne $entry.Expected) { throw "Route leakage $uri got $status" }
+            }
             if (-not (Test-Path "$env:LKH_NATIVE_STATE_DIR/data/mcp.sqlite3")) {
               throw "Native staging SQLite was not initialized"
             }
