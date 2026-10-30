@@ -17,7 +17,6 @@ import zlib
 from typing import Any
 
 import settings_store
-import codex_credentials
 
 _NAME = re.compile(r"^[A-Za-z0-9_-]{1,40}$")
 _REPO = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
@@ -178,8 +177,14 @@ def get_task(task_id: str) -> dict:
 
 
 def check_agent_token(header: str) -> bool:
-    """Existing Agent endpoints use the managed credential or legacy bootstrap."""
-    return codex_credentials.check_token(header)
+    stored = os.getenv("CODEX_AGENT_TOKEN", "")
+    if len(stored) < 32 or not stored.isascii():
+        return False
+    prefix = "Bearer "
+    if not isinstance(header, str) or not header.startswith(prefix):
+        return False
+    token = header[len(prefix):]
+    return len(token) <= 256 and hmac.compare_digest(token, stored)
 
 
 def claim(agent_id: str, projects: list[str]) -> dict:

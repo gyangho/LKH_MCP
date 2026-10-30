@@ -283,43 +283,6 @@ def send_heartbeat(base: str, agent_id: str, projects: list[str],
 
 
 
-def load_agent_token(config_path: Path) -> str:
-    """Load bearer token without requiring a shell environment variable.
-
-    The environment overrides private files. The dedicated untracked token file
-    is preferred over the legacy local bootstrap (which can contain other secrets).
-    Never transmit these files or expose their content to Codex.
-    """
-    token = os.getenv("LKH_CODEX_AGENT_TOKEN", "")
-    if token:
-        source = "environment"
-    else:
-        config_path = Path(config_path).resolve()
-        paths = (
-            (config_path.parent / "token.json", "token"),
-            (Path(__file__).resolve().parents[1] / "secrets" / "bootstrap.json",
-             "CODEX_AGENT_TOKEN"),
-        )
-        source = ""
-        for candidate, key in paths:
-            if not candidate.is_file():
-                continue
-            if candidate.stat().st_size > 16384:
-                raise ValueError("Agent credential file too large")
-            data = json.loads(candidate.read_text(encoding="utf-8-sig"))
-            if not isinstance(data, dict) or not isinstance(data.get(key), str):
-                raise ValueError("Invalid Agent credential file")
-            token = data[key]
-            source = "local private file"
-            break
-    if not isinstance(token, str) or not 32 <= len(token) <= 256 or not token.isascii():
-        raise RuntimeError(
-            "Codex Agent token missing/invalid. Configure a private token.json, "
-            "an existing secrets/bootstrap.json, or LKH_CODEX_AGENT_TOKEN."
-        )
-    return token
-
-
 def validate_config(cfg: dict) -> tuple[str, str]:
     if sys.platform != "win32":
         raise RuntimeError("Windows Agent runs on Windows only")
@@ -347,7 +310,9 @@ def main() -> None:
     args = ap.parse_args()
     cfg = json.loads(Path(args.config).read_text(encoding="utf-8"))
     base, agent_id = validate_config(cfg)
-    token = load_agent_token(Path(args.config))
+    token = os.getenv("LKH_CODEX_AGENT_TOKEN", "")
+    if len(token) < 32:
+        raise RuntimeError("LKH_CODEX_AGENT_TOKEN environment variable required (32+ chars)")
     interval = max(5, min(60, int(cfg.get("poll_interval_seconds", 10))))
     projects = list(cfg["projects"])
     stop = threading.Event()
