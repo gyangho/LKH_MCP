@@ -52,7 +52,7 @@ def _protect(secret: bytes) -> bytes:
     import win32crypt
     return win32crypt.CryptProtectData(
         secret, "LKH MCP Agent local device", None, None, None,
-        win32crypt.CRYPTPROTECT_LOCAL_MACHINE)
+        0x4)  # CRYPTPROTECT_LOCAL_MACHINE (Win32 CryptoAPI flag)
 
 
 def _unprotect(blob: bytes) -> bytes:
