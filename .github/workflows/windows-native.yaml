@@ -5,7 +5,7 @@ on:
     paths:
       - 'src/**'
       - 'tests/**'
-      - 'scripts/build-native-server.ps1'
+      - 'scripts/**'
       - 'scripts/generate_icon.py'
       - 'scripts/windows-version.txt'
       - 'frontend/**'
@@ -18,7 +18,7 @@ on:
     paths:
       - 'src/**'
       - 'tests/**'
-      - 'scripts/build-native-server.ps1'
+      - 'scripts/**'
       - 'scripts/generate_icon.py'
       - 'scripts/windows-version.txt'
       - 'frontend/**'
@@ -42,6 +42,19 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Validate native Windows PowerShell scripts
+        shell: pwsh
+        run: |
+          foreach ($name in @("build-native-server.ps1", "build-native-suite.ps1",
+                              "install-agent-task.ps1", "native-installer-preflight.ps1")) {
+            $tokens = $null
+            $errors = $null
+            $path = (Resolve-Path "scripts/$name").Path
+            [System.Management.Automation.Language.Parser]::ParseFile($path, [ref]$tokens, [ref]$errors) | Out-Null
+            if ($errors.Count -gt 0) {
+              throw "PowerShell syntax error in $name : $($errors[0])"
+            }
+          }
       - name: I1 native configuration unit tests
         shell: pwsh
         run: |
