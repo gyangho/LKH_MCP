@@ -12,7 +12,7 @@ from uiux_tools import register_uiux_tools
 from codex_bridge import register_codex_tools
 from codex_agent_routes import register_agent_routes
 from codex_admin import register_codex_admin_routes
-from runtime_state import initialize_state, instrument_tools
+from runtime_state import initialize_state, instrument_tools, instrument_routes
 from admin_console import register_routes
 
 initialize_state()
@@ -22,6 +22,7 @@ mcp = MCPServer(
     instructions="Oracle SELECT-only, UI UX guidance, scoped Graphify queries, and allowlisted Git tools. Privileged operations require local opt-in."
 )
 instrument_tools(mcp)
+instrument_routes(mcp)
 
 
 @mcp.tool()
