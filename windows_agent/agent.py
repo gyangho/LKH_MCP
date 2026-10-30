@@ -14,6 +14,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import urllib.error
 import urllib.parse
@@ -32,7 +33,7 @@ def safe_env() -> dict[str, str]:
     keep = {"PATH", "PATHEXT", "SYSTEMROOT", "WINDIR", "TEMP", "TMP", "TMPDIR",
             "USERPROFILE", "HOME", "APPDATA", "LOCALAPPDATA", "PROGRAMDATA",
             "COMSPEC", "HOMEDRIVE", "HOMEPATH", "LANG", "LC_ALL", "SSH_AUTH_SOCK",
-            "GIT_TERMINAL_PROMPT", "GCM_INTERACTIVE"}
+            "GIT_TERMINAL_PROMPT", "GCM_INTERACTIVE", "CODEX_HOME"}
     env = {k: v for k, v in os.environ.items() if k.upper() in keep}
     env["GIT_TERMINAL_PROMPT"] = "0"
     env["GCM_INTERACTIVE"] = "never"
@@ -222,6 +223,45 @@ def post_json(base: str, route: str, payload: dict, token: str, timeout: int = 3
         return json.loads(response.read(500_000).decode("utf-8"))
 
 
+def probe_capabilities() -> dict[str, bool]:
+    """Check the exact Windows account that runs this Agent; never return CLI output."""
+    codex = shutil.which("codex")
+    authenticated = False
+    if codex:
+        try:
+            result = subprocess.run(
+                [codex, "login", "status"], env=safe_env(),
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                shell=False, timeout=10, check=False,
+            )
+            authenticated = result.returncode == 0
+        except (OSError, subprocess.TimeoutExpired):
+            pass
+    return {
+        "git_installed": shutil.which("git") is not None,
+        "codex_installed": codex is not None,
+        "codex_authenticated": authenticated,
+        "graphify_installed": shutil.which("graphify") is not None,
+    }
+
+
+def send_heartbeat(base: str, agent_id: str, projects: list[str],
+                   capabilities: dict[str, bool], token: str) -> bool:
+    """Report presence over the existing private Agent listener without exposing secrets."""
+    try:
+        post_json(base, "/admin/agent/heartbeat",
+                  {"agent_id": agent_id, "projects": projects,
+                   "capabilities": capabilities}, token, timeout=10)
+        return True
+    except urllib.error.HTTPError as exc:
+        print(f"Agent heartbeat rejected: HTTP {exc.code}", file=sys.stderr, flush=True)
+    except (urllib.error.URLError, OSError, ValueError, RuntimeError) as exc:
+        print(f"Agent heartbeat failed: {type(exc).__name__}",
+              file=sys.stderr, flush=True)
+    return False
+
+
+
 def validate_config(cfg: dict) -> tuple[str, str]:
     if sys.platform != "win32":
         raise RuntimeError("Windows Agent runs on Windows only")
@@ -253,23 +293,46 @@ def main() -> None:
     if len(token) < 32:
         raise RuntimeError("LKH_CODEX_AGENT_TOKEN environment variable required (32+ chars)")
     interval = max(5, min(60, int(cfg.get("poll_interval_seconds", 10))))
-    while True:
-        try:
-            response = post_json(base, "/admin/agent/claim", {"agent_id": agent_id,
-                        "projects": list(cfg["projects"])}, token)
-            job = response.get("job")
-            if job:
-                success, report, error, graph = process(job, cfg)
-                answer = {"id": job["id"], "lease": response["lease"],
-                          "agent_id": agent_id, "success": success,
-                          "report": report[:16000], "error": error[:2000], "graph_base64": graph}
-                post_json(base, "/admin/agent/complete", answer, token, timeout=90)
-                print(f"Task {job['id'][:8]}: {'OK' if success else 'FAILED'}", flush=True)
-        except (urllib.error.URLError, ValueError, OSError, KeyError, RuntimeError) as exc:
-            print(f"Agent communication issue: {type(exc).__name__}", file=sys.stderr, flush=True)
-        if args.once:
-            return
-        time.sleep(interval)
+    projects = list(cfg["projects"])
+    stop = threading.Event()
+
+    # Heartbeat thread continues while Codex executes a long-running job.
+    # Periodically recheck login/CLI status, never include login output.
+    def maintain_presence() -> None:
+        capabilities = probe_capabilities()
+        last_probe = time.monotonic()
+        send_heartbeat(base, agent_id, projects, capabilities, token)
+        while not stop.wait(interval):
+            if time.monotonic() - last_probe >= 120:
+                capabilities = probe_capabilities()
+                last_probe = time.monotonic()
+            send_heartbeat(base, agent_id, projects, capabilities, token)
+
+    presence_thread = threading.Thread(
+        target=maintain_presence, name="codex-agent-heartbeat", daemon=True
+    )
+    presence_thread.start()
+    try:
+        while True:
+            try:
+                response = post_json(base, "/admin/agent/claim", {"agent_id": agent_id,
+                            "projects": projects}, token)
+                job = response.get("job")
+                if job:
+                    success, report, error, graph = process(job, cfg)
+                    answer = {"id": job["id"], "lease": response["lease"],
+                              "agent_id": agent_id, "success": success,
+                              "report": report[:16000], "error": error[:2000], "graph_base64": graph}
+                    post_json(base, "/admin/agent/complete", answer, token, timeout=90)
+                    print(f"Task {job['id'][:8]}: {'OK' if success else 'FAILED'}", flush=True)
+            except (urllib.error.URLError, ValueError, OSError, KeyError, RuntimeError) as exc:
+                print(f"Agent communication issue: {type(exc).__name__}", file=sys.stderr, flush=True)
+            if args.once:
+                return
+            stop.wait(interval)
+    finally:
+        stop.set()
+        presence_thread.join(timeout=12)
 
 
 if __name__ == "__main__":
