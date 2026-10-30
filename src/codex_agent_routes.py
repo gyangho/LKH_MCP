@@ -8,9 +8,31 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 from codex_bridge import check_agent_token, claim, complete
+from codex_presence import heartbeat
 
 
 def register_agent_routes(mcp: Any) -> None:
+    @mcp.custom_route("/admin/agent/heartbeat", methods=["POST"])
+    async def agent_heartbeat(request: Request):
+        headers = {"Cache-Control": "no-store"}
+        if not check_agent_token(request.headers.get("authorization", "")):
+            return JSONResponse({"error": "unauthorized"}, status_code=401, headers=headers)
+        try:
+            if request.headers.get("content-type", "").split(";")[0].strip().lower() != "application/json":
+                raise ValueError("JSON required")
+            raw = await request.body()
+            if not 1 <= len(raw) <= 2048:
+                raise ValueError("Invalid body length")
+            data = json.loads(raw)
+            if not isinstance(data, dict) or set(data) != {"agent_id", "projects", "capabilities"}:
+                raise ValueError("Invalid heartbeat")
+            return JSONResponse(heartbeat(data["agent_id"], data["projects"],
+                                          data["capabilities"]), headers=headers)
+        except PermissionError:
+            return JSONResponse({"error": "agent disabled"}, status_code=403, headers=headers)
+        except (ValueError, TypeError, KeyError, json.JSONDecodeError):
+            return JSONResponse({"error": "invalid heartbeat"}, status_code=400, headers=headers)
+
     @mcp.custom_route("/admin/agent/claim", methods=["POST"])
     async def agent_claim(request: Request):
         if not check_agent_token(request.headers.get("authorization", "")):
