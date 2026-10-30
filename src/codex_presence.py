@@ -10,6 +10,7 @@ import os
 import re
 
 import codex_bridge as bridge
+import codex_credentials
 
 ONLINE_WINDOW_SECONDS = 45
 STALE_RETENTION_SECONDS = 30 * 86400
@@ -67,7 +68,7 @@ def heartbeat(agent_id: str, projects: list[str], capabilities: dict) -> dict:
 def agents_snapshot() -> dict:
     """Administrator-only caller exposes bounded, non-secret connection metadata."""
     enabled = bool(bridge.settings_store.get("CODEX_AGENT_ENABLED"))
-    configured = len(os.getenv("CODEX_AGENT_TOKEN", "")) >= 32
+    configured = codex_credentials.status()["configured"]
     now = bridge._now()
     conn = bridge._connect()
     conn.row_factory = __import__("sqlite3").Row
