@@ -147,7 +147,7 @@ def register_configuration_routes(mcp: Any) -> None:
         try:
             _verify_access(request)
             base = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent.parent))
-            return _private(HTMLResponse((base / "web" / "config.html").read_text(encoding="utf-8")))
+            return _private(HTMLResponse(_html()))
         except (AdminNotConfigured, AdminUnauthorized) as exc:
             return _private(_auth_response(exc, request))
 

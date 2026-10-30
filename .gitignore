@@ -67,5 +67,8 @@ Desktop.ini
 # Docker credentials and local overrides (bootstrap.example.json is tracked)
 /secrets/bootstrap.json
 /secrets/codex_worker_token
+/windows_agent/config.json
+frontend/node_modules/
+frontend/dist/
 /compose.override.yaml
 /data/
