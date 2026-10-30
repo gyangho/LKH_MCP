@@ -31,9 +31,12 @@ class RuntimeTests(unittest.TestCase):
             "GIT_ALLOW_COMMIT": "false",
             "GIT_ALLOW_PUSH": "false",
             "GRAPHIFY_ALLOW_UPDATE": "false",
-        })
+        }, clear=True)
         env.start()
         self.addCleanup(env.stop)
+        dotenv_mock = patch("dotenv.load_dotenv", return_value=False)
+        dotenv_mock.start()
+        self.addCleanup(dotenv_mock.stop)
         settings_store._READY = False
         self.addCleanup(lambda: setattr(settings_store, "_READY", False))
 

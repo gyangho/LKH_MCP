@@ -72,6 +72,10 @@ def _execute(*args: str) -> dict[str, Any]:
         )
     except subprocess.TimeoutExpired as exc:
         raise RuntimeError("UI UX Pro Max 검색 시간이 40초를 초과했습니다.") from exc
+    except FileNotFoundError as exc:
+        raise RuntimeError("UI UX Pro Max Python 실행 파일을 찾을 수 없습니다. UIUX_PYTHON_EXECUTABLE 또는 가상환경 Python 경로를 확인하세요.") from exc
+    except OSError as exc:
+        raise RuntimeError("UI UX Pro Max 검색 프로세스 시작에 실패했습니다. 실행 파일과 접근 권한을 확인하세요.") from exc
     if result.returncode:
         raise RuntimeError(
             f"UI UX Pro Max 검색 오류 (exit={result.returncode}): "

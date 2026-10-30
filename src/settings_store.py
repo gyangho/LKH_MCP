@@ -78,9 +78,14 @@ def _validate(key: str, value: Any) -> Any:
             entries = value.split(";")
             if len(entries) > 10:
                 raise ValueError("프로젝트는 최대 10개입니다.")
+            seen_names = set()
             for entry in entries:
-                if "=" not in entry or not re.fullmatch(r"[A-Za-z0-9_-]{1,40}", entry.split("=", 1)[0]):
+                if "=" not in entry:
                     raise ValueError("PROJECT=경로 또는 PROJECT=owner/repo 형식이 필요합니다.")
+                name, target = (part.strip() for part in entry.split("=", 1))
+                if not re.fullmatch(r"[A-Za-z0-9_-]{1,40}", name) or not target or name in seen_names:
+                    raise ValueError("프로젝트 별칭 중복 또는 PROJECT=대상 형식 오류입니다.")
+                seen_names.add(name)
         if key == "ORACLE_ALLOWED_TABLES" and len(value) > 2000:
             raise ValueError("테이블 허용 목록이 너무 깁니다.")
     return value

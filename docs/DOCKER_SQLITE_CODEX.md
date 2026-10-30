@@ -84,4 +84,4 @@ An unauthenticated GET to /admin should return **303 to /admin/login**, not the 
 
 Local Git/Graphify tools and the Docker Codex debugging worker are no longer registered. The Docker MCP server provides a durable SQLite work queue and serves compressed Graphify snapshots without touching working trees. Windows Codex Agent alone performs local pull, tests, diagnostics and Graphify builds. Fix requests require administrator approval and are performed only in disposable worktrees.
 
-See [Windows Codex Agent setup](WINDOWS_CODEX_AGENT.md) for token generation, private network connectivity, Windows Task Scheduler, new tools, Graphify commit SHA tracking and verification. **Never start the legacy compose.codex.yaml worker as part of the new workflow.** Existing SQLite named volume and bootstrap secrets must be preserved.
+See [Windows Codex Agent setup](WINDOWS_CODEX_AGENT.md) for token generation, private network connectivity, Windows Task Scheduler, new tools, Graphify commit SHA tracking and verification. **Do not start the legacy compose.codex.yaml worker as part of the new workflow.** Existing SQLite named volume and bootstrap secrets must be preserved.

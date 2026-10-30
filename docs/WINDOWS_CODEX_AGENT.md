@@ -8,19 +8,20 @@
 - Graphify graph is generated using the **installed Graphify Codex skill** (`graphify install --platform codex`) and returned to SQLite, not stored in GitHub. The query result contains the commit SHA. Graph snapshots can contain proprietary topology; restrict MCP access accordingly.
 - The bridge has no remote shell tool, no arbitrary command execution endpoint and no inbound Windows agent listener. The queue contains only `verify`, `diagnose`, `fix`, `graphify` task kinds.
 
-## 1. Deploy backend change
+## 1. Update and deploy from GitHub
 
-The patch bundle includes `apply.py`. Its `--check` command verifies the exact GitHub file versions and NEVER writes. `--apply` writes only after all file checks pass, backs up modified originals next to the local repo, and does not perform Git operations. **Have local Codex execute it after reviewing the patch; ChatGPT does not operate your Windows checkout.**
+Review any local pending changes, then have the Windows Codex perform the approved pull and environment verification. Never force-pull or discard user edits. The Windows Agent itself checks exact GitHub commit SHA, rejects dirty checkouts and uses fast-forward merges.
 
 ```powershell
-python .\lkh_codex_bridge_patch\apply.py --repo "C:\Users\User\Desktop\이경호\개발\LKH_MCP" --check
-# After reviewing the changes and confirming the base:
-python .\lkh_codex_bridge_patch\apply.py --repo "C:\Users\User\Desktop\이경호\개발\LKH_MCP" --apply
+git status --short
+git pull --ff-only origin main
+python -m compileall -q src windows_agent tests
+$env:PYTHONPATH = "src"
+python -m unittest discover -s tests -t . -p "test_*.py" -v
+docker --context naru compose -f compose.yaml up -d --build
 ```
 
-`apply.py` refuses to overwrite changed base files and never overwrites existing new files. GitHub main HEAD when prepared: `2192a56e2ae8bb84598823aa6bf8105cdae1b1f9`. Do not use `git reset --hard`, force push, or discard uncommitted files to satisfy the guard.
-
-**Existing SQLite data and Docker named volumes must be preserved.** After local review and explicit commit/push authorization, standard deployment can use `docker --context naru compose -f compose.yaml up -d --build`. No new ports are required. `8000 /mcp` and `8001 /admin` gateway separation is retained.
+Existing SQLite data and Docker named volumes must be preserved. The agent API is served on the existing private 8001 admin listener; no additional inbound port is required. Docker deployment and Windows Agent configuration are separate from GitHub push and must be verified in the user's environment.
 
 ## 2. Token provision and permissions
 

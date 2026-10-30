@@ -16,9 +16,12 @@ class TestSettingsStore(unittest.TestCase):
         e = patch.dict(os.environ, {"MCP_DB_PATH": str(self.path),
                                     "MCP_BOOTSTRAP_FILE": str(Path(tmp.name) / "missing.json"),
                                     "GIT_ALLOW_PUSH": "false", "GIT_ALLOW_COMMIT": "false",
-                                    "CODEX_DELEGATION_ENABLED": "false"})
+                                    "CODEX_DELEGATION_ENABLED": "false"}, clear=True)
         e.start()
         self.addCleanup(e.stop)
+        dotenv_mock = patch("dotenv.load_dotenv", return_value=False)
+        dotenv_mock.start()
+        self.addCleanup(dotenv_mock.stop)
         settings_store._READY = False
         self.addCleanup(lambda: setattr(settings_store, "_READY", False))
 
@@ -32,6 +35,13 @@ class TestSettingsStore(unittest.TestCase):
         settings_store._READY = False
         settings_store.initialize()
         self.assertTrue(settings_store.get("GIT_ALLOW_PUSH"))
+
+    def test_project_names_accept_spacing_but_not_duplicates(self):
+        good = "ITAM=gyangho/ITAM; LKH_MCP=gyangho/LKH_MCP"
+        self.assertEqual(settings_store._validate("GIT_ALLOWED_REPOS", good), good)
+        for bad in ("ITAM=gyangho/ITAM;ITAM=gyangho/ITAM", "ITAM=gyangho/ITAM;", "ITAM= "):
+            with self.subTest(bad=bad), self.assertRaises(ValueError):
+                settings_store._validate("GIT_ALLOWED_REPOS", bad)
 
     def test_rejects_unapproved_keys_and_wrong_types(self):
         with self.assertRaises(ValueError):

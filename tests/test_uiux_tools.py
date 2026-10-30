@@ -1,5 +1,6 @@
 """Self-contained smoke tests for the adapter, without Oracle or GitHub access."""
 import json
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -32,6 +33,16 @@ class TestUiuxTools(unittest.TestCase):
         self.mock_script = patch.object(uiux_tools, "SCRIPT", script)
         self.mock_script.start()
         self.addCleanup(self.mock_script.stop)
+        # Adapter unit tests must never spawn the host's real Python executable.
+        def fake_run(command, **kwargs):
+            return subprocess.CompletedProcess(
+                command, 0,
+                stdout=json.dumps({"args": command[2:], "count": 2, "results": [{"x": "ok"}]}),
+                stderr="",
+            )
+        runner = patch.object(uiux_tools.subprocess, "run", side_effect=fake_run)
+        runner.start()
+        self.addCleanup(runner.stop)
         mcp = FakeMCP()
         uiux_tools.register_uiux_tools(mcp)
         self.tools = mcp.tools
@@ -60,6 +71,11 @@ class TestUiuxTools(unittest.TestCase):
         result = self.tools["uiux_generate_design_system"]("SaaS dashboard", "ITAM")
         self.assertIn("--design-system", result["args"])
         self.assertNotIn("--persist", result["args"])
+
+    def test_missing_python_executable_has_actionable_error(self):
+        with patch.object(uiux_tools.subprocess, "run", side_effect=FileNotFoundError("missing")):
+            with self.assertRaisesRegex(RuntimeError, "UIUX_PYTHON_EXECUTABLE"):
+                self.tools["uiux_search"]("navigation")
 
     def test_blocks_bad_inputs(self):
         with self.assertRaises(ValueError):
