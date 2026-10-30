@@ -56,7 +56,7 @@ def change_flag(key: str, value: bool, actor: str) -> dict:
 
 
 def _record(tool: str, status: str, *, duration_ms: int = 0,
-            detail: str = "", actor: str = "") -> None:
+            detail: str = "", actor: str = "", trace_id: str = "") -> None:
     global _LAST_ERROR
     with _LOCK:
         entry = {"time": datetime.now(timezone.utc).isoformat(), "tool": tool,
@@ -73,7 +73,7 @@ def _record(tool: str, status: str, *, duration_ms: int = 0,
         from operations_store import record
         record("http" if tool.startswith("api_") else "tool",
                tool[4:] if tool.startswith("api_") else tool,
-               status, max(0, int(duration_ms)))
+               status, max(0, int(duration_ms)), trace_id=trace_id)
     except (OSError, ValueError, RuntimeError, __import__("sqlite3").Error):
         pass  # Local metrics must not alter the outcome of a tool call.
 
@@ -96,7 +96,7 @@ def _finish(ident: str, name: str, result: Any = None, error: bool = False) -> N
             error = True
         if error:
             _COUNTERS["failed"] += 1
-        _record(name, "error" if error else "success", duration_ms=millis)
+        _record(name, "error" if error else "success", duration_ms=millis, trace_id=ident)
 
 
 def instrument_tools(mcp: Any) -> None:
@@ -146,14 +146,16 @@ def instrument_routes(mcp: Any) -> None:
             @functools.wraps(fn)
             async def tracked(request):
                 started = time.monotonic()
+                correlation = uuid.uuid4().hex
                 status = "error"
                 try:
                     response = await fn(request)
+                    response.headers["X-Correlation-ID"] = correlation
                     status = "success" if response.status_code < 400 else "error"
                     return response
                 finally:
                     millis = min(3600000, max(0, int((time.monotonic() - started) * 1000)))
-                    _record("api_" + fn.__name__, status, duration_ms=millis)
+                    _record("api_" + fn.__name__, status, duration_ms=millis, trace_id=correlation)
             return decorator(tracked)
         return wrap
 

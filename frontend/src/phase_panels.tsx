@@ -160,7 +160,7 @@ export function InstructionsPanel() {
 }
 
 type Log = { id: number; at: number; category: string; name: string;
-  result: string; duration_ms: number };
+  result: string; duration_ms: number; trace_id: string };
 type Bucket = { minute: number; requests: number; errors: number; avg_duration_ms: number };
 export function OperationsPanel() {
   const [logs, setLogs] = useState<Log[]>([]);
@@ -200,10 +200,10 @@ export function OperationsPanel() {
     <section className="panel">
       <h2>구조화 로그 (메타데이터만)</h2>
       <p className="muted">30일 보존 · 프롬프트·명령·인증 토큰·출력 본문 미저장</p>
-      <div className="table-wrap"><table><thead><tr><th>시각</th><th>구분</th><th>이름</th><th>결과</th><th>ms</th></tr></thead>
+      <div className="table-wrap"><table><thead><tr><th>시각</th><th>구분</th><th>이름</th><th>결과</th><th>ms</th><th>Trace ID</th></tr></thead>
         <tbody>{logs.slice().reverse().map(e => <tr key={e.id}>
           <td>{new Date(e.at * 1000).toLocaleString("ko-KR")}</td>
-          <td>{e.category}</td><td>{e.name}</td><td>{e.result}</td><td>{e.duration_ms}</td>
+          <td>{e.category}</td><td>{e.name}</td><td>{e.result}</td><td>{e.duration_ms}</td><td title={e.trace_id}>{e.trace_id.slice(0, 10)}</td>
         </tr>)}</tbody>
       </table></div>
     </section>

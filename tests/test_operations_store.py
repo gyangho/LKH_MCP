@@ -25,6 +25,7 @@ class OperationsTests(unittest.TestCase):
         self.assertEqual([e["name"] for e in found["events"]],
                          ["oracle_select_dual", "codex_enqueue"])
         self.assertEqual(logs.read_events(cursor=found["cursor"])["events"], [])
+        self.assertEqual(len(found["events"][0]["trace_id"]), 32)
         buckets = logs.metrics(60)["buckets"]
         self.assertEqual(sum(b["requests"] for b in buckets), 2)
         self.assertEqual(sum(b["errors"] for b in buckets), 1)

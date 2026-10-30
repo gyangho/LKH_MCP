@@ -6,6 +6,7 @@ arguments, DB rows, command outputs or exception messages.
 from __future__ import annotations
 
 import re
+import uuid
 import sqlite3
 import time
 
@@ -21,24 +22,29 @@ def _db():
     db.execute("""CREATE TABLE IF NOT EXISTS operation_events(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         at INTEGER NOT NULL, category TEXT NOT NULL, name TEXT NOT NULL,
-        result TEXT NOT NULL, duration_ms INTEGER NOT NULL
+        result TEXT NOT NULL, duration_ms INTEGER NOT NULL, trace_id TEXT NOT NULL DEFAULT ''
     )""")
+    if "trace_id" not in {row[1] for row in db.execute("PRAGMA table_info(operation_events)")}:
+        db.execute("ALTER TABLE operation_events ADD COLUMN trace_id TEXT NOT NULL DEFAULT ''")
     db.execute("CREATE INDEX IF NOT EXISTS operation_events_at ON operation_events(at)")
     return db
 
 
-def record(category: str, name: str, result: str, duration_ms: int = 0) -> None:
+def record(category: str, name: str, result: str, duration_ms: int = 0, trace_id: str = "") -> None:
     for label in (category, name, result):
         if not isinstance(label, str) or not _LABEL.fullmatch(label):
             raise ValueError("Unsafe telemetry label")
     if type(duration_ms) is not int or not 0 <= duration_ms <= 3600000:
         raise ValueError("Invalid duration")
+    if trace_id and (not isinstance(trace_id, str) or not re.fullmatch(r"[0-9a-f]{32}", trace_id)):
+        raise ValueError("Invalid trace ID")
+    trace_id = trace_id or uuid.uuid4().hex
     db = _db()
     try:
         with db:
             now = int(time.time())
-            db.execute("INSERT INTO operation_events(at,category,name,result,duration_ms) VALUES(?,?,?,?,?)",
-                       (now, category, name, result, duration_ms))
+            db.execute("INSERT INTO operation_events(at,category,name,result,duration_ms,trace_id) VALUES(?,?,?,?,?,?)",
+                       (now, category, name, result, duration_ms, trace_id))
             db.execute("DELETE FROM operation_events WHERE at<?", (now - _RETENTION,))
             db.execute("""DELETE FROM operation_events WHERE id IN (
                 SELECT id FROM operation_events ORDER BY id DESC LIMIT -1 OFFSET ?)""",
@@ -61,7 +67,7 @@ def read_events(*, cursor: int = 0, limit: int = 100, category: str = "") -> dic
         if category:
             conditions.append("category=?")
             args.append(category)
-        rows = db.execute("""SELECT id,at,category,name,result,duration_ms
+        rows = db.execute("""SELECT id,at,category,name,result,duration_ms,trace_id
             FROM operation_events WHERE """ + " AND ".join(conditions) +
             " ORDER BY id ASC LIMIT ?", (*args, limit)).fetchall()
         data = [dict(row) for row in rows]
