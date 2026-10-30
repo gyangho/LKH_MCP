@@ -73,6 +73,20 @@ def read_device_secret(root: Path | None = None) -> str:
     return raw
 
 
+def _copy_file_acl(source: Path, destination: Path) -> None:
+    """Preserve per-Agent Windows read ACL when rotating the DPAPI blob.
+
+    os.replace() retains the replacement file's ACL, not the old file's ACL.
+    Losing that ACE would strand the Agent after an otherwise valid rotation.
+    """
+    if os.name != "nt":
+        return
+    import win32security
+    flags = win32security.DACL_SECURITY_INFORMATION
+    descriptor = win32security.GetFileSecurity(str(source), flags)
+    win32security.SetFileSecurity(str(destination), flags, descriptor)
+
+
 def provision(root: Path | None = None, *, rotate: bool = False) -> dict:
     """Admin-only installer action; rotation writes a new local protected blob."""
     path, _ = _paths(root)
@@ -80,6 +94,8 @@ def provision(root: Path | None = None, *, rotate: bool = False) -> dict:
     with _connect(root) as db:
         current = db.execute("SELECT generation FROM native_device WHERE id=1").fetchone()
         if current and not rotate:
+            if not path.is_file():
+                raise RuntimeError("Registered device key missing; operator recovery required")
             return {"provisioned": True, "generation": current[0], "unchanged": True}
         # Fail closed: never overwrite an unknown device key without explicit rotation.
         if path.exists() and not current:
@@ -87,20 +103,41 @@ def provision(root: Path | None = None, *, rotate: bool = False) -> dict:
         device_secret = secrets.token_urlsafe(48)
         encoded = _protect(device_secret.encode("ascii"))
         tmp = path.with_name("agent-credential-" + secrets.token_hex(8) + ".tmp")
+        old_blob = path.read_bytes() if path.is_file() else None
+        replaced = False
         try:
             with tmp.open("xb") as output:
                 output.write(encoded)
+            if old_blob is not None:
+                _copy_file_acl(path, tmp)
             os.replace(tmp, path)
+            replaced = True
+            generation = (current[0] + 1) if current else 1
+            db.execute("""INSERT INTO native_device(id,verifier,generation,updated_at)
+                          VALUES(1,?,?,?) ON CONFLICT(id) DO UPDATE SET
+                          verifier=excluded.verifier,generation=excluded.generation,
+                          updated_at=excluded.updated_at""",
+                       (hashlib.sha256(device_secret.encode("ascii")).hexdigest(),
+                        generation, int(time.time())))
+            db.execute("DELETE FROM native_agent_sessions")
+        except BaseException:
+            # DB context rolls back on exception. Restore original encrypted
+            # credential on common non-crash failures so the Agent stays enrolled.
+            if replaced:
+                if old_blob is None:
+                    path.unlink(missing_ok=True)
+                else:
+                    recovery = path.with_name("agent-recovery-" + secrets.token_hex(8) + ".tmp")
+                    try:
+                        with recovery.open("xb") as output:
+                            output.write(old_blob)
+                        _copy_file_acl(path, recovery)
+                        os.replace(recovery, path)
+                    finally:
+                        recovery.unlink(missing_ok=True)
+            raise
         finally:
             tmp.unlink(missing_ok=True)
-        generation = (current[0] + 1) if current else 1
-        db.execute("""INSERT INTO native_device(id,verifier,generation,updated_at)
-                      VALUES(1,?,?,?) ON CONFLICT(id) DO UPDATE SET
-                      verifier=excluded.verifier,generation=excluded.generation,
-                      updated_at=excluded.updated_at""",
-                   (hashlib.sha256(device_secret.encode("ascii")).hexdigest(),
-                    generation, int(time.time())))
-        db.execute("DELETE FROM native_agent_sessions")
     return {"provisioned": True, "generation": generation, "unchanged": False}
 
 

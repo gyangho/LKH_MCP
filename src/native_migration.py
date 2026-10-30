@@ -7,6 +7,7 @@ and does NOT perform production cutover or Cloudflare changes.
 from __future__ import annotations
 
 import argparse
+import hashlib
 from contextlib import closing
 import json
 import os
@@ -32,7 +33,14 @@ def inspect_database(path: Path) -> dict:
         for name in tables:
             quoted = '"' + name.replace('"', '""') + '"'
             counts[name] = db.execute("SELECT COUNT(*) FROM " + quoted).fetchone()[0]
-        return {"integrity": "ok", "tables": counts, "bytes": path.stat().st_size}
+        # A row count alone cannot detect overwritten values or schema drift.
+        # Hash a streamed logical SQL dump (including schema and row values).
+        digest = hashlib.sha256()
+        for statement in db.iterdump():
+            digest.update(statement.encode("utf-8"))
+            digest.update(b"\\n")
+        return {"integrity": "ok", "tables": counts,
+                "logical_sha256": digest.hexdigest(), "bytes": path.stat().st_size}
 
 
 def copy_snapshot(source: Path, destination: Path) -> dict:
@@ -55,6 +63,8 @@ def copy_snapshot(source: Path, destination: Path) -> dict:
         migrated = inspect_database(temporary)
         if migrated["tables"] != original["tables"]:
             raise RuntimeError("Table row-count mismatch after backup")
+        if migrated["logical_sha256"] != original["logical_sha256"]:
+            raise RuntimeError("Logical contents or schema mismatch after backup")
         # Fail closed if someone creates destination during backup.
         with destination.open("xb"):
             pass
@@ -65,7 +75,8 @@ def copy_snapshot(source: Path, destination: Path) -> dict:
             raise
         return {"source": str(source), "destination": str(destination),
                 "source_tables": original["tables"], "copied_tables": migrated["tables"],
-                "integrity": migrated["integrity"]}
+                "integrity": migrated["integrity"],
+                "logical_sha256": migrated["logical_sha256"]}
     finally:
         temporary.unlink(missing_ok=True)
 

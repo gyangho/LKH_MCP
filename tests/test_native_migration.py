@@ -26,11 +26,22 @@ class MigrationTests(unittest.TestCase):
         result = copy_snapshot(self.original, dest)
         self.assertEqual(result["integrity"], "ok")
         self.assertEqual(inspect_database(dest)["tables"], before["tables"])
+        self.assertEqual(inspect_database(dest)["logical_sha256"], before["logical_sha256"])
         self.assertEqual(before["tables"]["critical_events"], 1)
         self.source_connection.execute("INSERT INTO critical_events(name) VALUES ('after')")
         self.source_connection.commit()
         self.assertEqual(inspect_database(dest)["tables"]["critical_events"], 1)
         self.assertEqual(inspect_database(self.original)["tables"]["critical_events"], 2)
+
+    def test_logical_digest_detects_same_rowcount_modification(self):
+        dest = self.root / "staging.sqlite3"
+        copy_snapshot(self.original, dest)
+        before = inspect_database(self.original)
+        with sqlite3.connect(dest) as db:
+            db.execute("UPDATE critical_events SET name='changed' WHERE id=1")
+        after = inspect_database(dest)
+        self.assertEqual(before["tables"], after["tables"])
+        self.assertNotEqual(before["logical_sha256"], after["logical_sha256"])
 
     def test_never_overwrites_or_deletes_existing_data(self):
         dest = self.root / "existing.sqlite3"

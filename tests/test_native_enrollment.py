@@ -49,6 +49,23 @@ class EnrollmentTests(unittest.TestCase):
         self.assertTrue(enrollment.check_access(
             "Bearer " + enrollment.issue_session(fresh, self.root)["access_token"], self.root))
 
+    def test_rotation_rolls_back_credential_if_sql_update_fails(self):
+        enrollment.provision(self.root)
+        old_secret = enrollment.read_device_secret(self.root)
+        old_token = enrollment.issue_session(old_secret, self.root)["access_token"]
+        with patch.object(enrollment.time, "time", side_effect=RuntimeError("forced failure")):
+            with self.assertRaises(RuntimeError):
+                enrollment.provision(self.root, rotate=True)
+        self.assertEqual(enrollment.read_device_secret(self.root), old_secret)
+        self.assertTrue(enrollment.check_access("Bearer " + old_token, self.root))
+
+    def test_existing_registration_requires_credential_file(self):
+        enrollment.provision(self.root)
+        path = self.root / "config" / "agent-credential.bin"
+        path.unlink()
+        with self.assertRaises(RuntimeError):
+            enrollment.provision(self.root)
+
     def test_orphaned_enrollment_refused(self):
         path = self.root / "config" / "agent-credential.bin"
         path.parent.mkdir(parents=True)
