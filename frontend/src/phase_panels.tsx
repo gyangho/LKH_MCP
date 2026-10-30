@@ -35,7 +35,7 @@ export function CodexEventStream({ taskId }: { taskId: string }) {
         const data = await secureApi<{events: Event[]; cursor: number}>(
           `/admin/api/codex/events/${encodeURIComponent(taskId)}?after=${cursor}`);
         if (!alive) return;
-        setEvents(prev => [...prev, ...data.events].slice(-400));
+        setEvents(prev => [...new Map([...prev, ...data.events].map(e => [e.seq, e])).values()].slice(-400));
         setCursor(data.cursor);
         setError("");
       } catch (err) {
@@ -175,7 +175,7 @@ export function OperationsPanel() {
         secureApi<{events: Log[]; cursor: number}>(`/admin/api/operations/logs?cursor=${cursor}`),
         secureApi<{buckets: Bucket[]; runtime: typeof runtime}>(`/admin/api/operations/metrics?minutes=60`),
       ]);
-      setLogs(prev => [...prev, ...log.events].slice(-200));
+      setLogs(prev => [...new Map([...prev, ...log.events].map(e => [e.id, e])).values()].slice(-200));
       setCursor(log.cursor);
       setBuckets(metric.buckets); setRuntime(metric.runtime); setError("");
     } catch (err) { setError((err as Error).message); }

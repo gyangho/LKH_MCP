@@ -1,6 +1,6 @@
 # Phase 1–9 Implementation / Verification Ledger
 
-**Branch:** `refac` · **Date:** 2026-10-30 · **Status:** CODE UNDER CI VALIDATION
+**Branch:** `refac` · **Date:** 2026-10-30 · **Status:** IMPLEMENTED FOR STAGING; CI PASS, PRODUCTION E2E UNVERIFIED
 
 This is evidence tracking for [the canonical roadmap](ROADMAP.md). It is not a
 deployment approval. Production Naru, Cloudflare, Oracle, SQLite and Windows
@@ -41,3 +41,14 @@ I7 live SQLite export and cutover, installation/upgrade on the real Windows host
 Cloudflare route switch, Oracle 11g Thick runtime, real Codex CLI/MXC and Graphify
 are deferred until the user can grant a test/deployment window. Do not mark Phase 9
 `VERIFIED` or `RELEASED` based on CI alone.
+
+## Implementation verification checkpoint — 2026-10-30
+
+- Python/unit/API security, frontend TypeScript/Vite and Nginx/Compose: **PASS** at [GitHub Actions 41037611656](https://github.com/gyangho/LKH_MCP/actions/runs/41037611656).
+- Windows Native Suite (unsigned packaging, real DPAPI/SCM/Task Scheduler and isolated loopback smoke): **PASS** at [GitHub Actions 41037387950](https://github.com/gyangho/LKH_MCP/actions/runs/41037387950). This is an ephemeral GitHub runner and does not establish host-specific E2E.
+- Phase 1/3 test evidence: reject invalid Agent leases, deduplicate sequence cursors, restrict event payloads to enums, prevent worktree cleanup exceptions from masking completed task results. Actual Codex CLI `--json` output and Windows sandbox ACL cleanup remain unverified.
+- Phase 4–6 test evidence: unpublished drafts never resolve from MCP, optimistic revision rejects stale updates, published scope precedence and rollback are test-covered; management API denies unauthenticated and CSRF-invalid requests.
+- Phase 7–8 test evidence: metadata-only events and request correlation IDs, response status and duration, bounded retention, minute metrics, default denial for untrusted admin requests. API trace response header is an opaque ID, not credentials.
+- Phase 9: repository-local `.agents/skills/lkh-development/SKILL.md`, tests for documented gates and audit boundaries, `refac` Draft PR. Real cutover remains deferred as explicitly requested.
+
+**Release classification:** the above features are staged code, not deployed product. Phase 3, 6 and 9 require live Codex, UI, Oracle and Windows security E2E before their full acceptance criteria can be marked VERIFIED; Gate G5 requires a separate user approval. No `main` merge, production service restart, database export or Cloudflare routing change took place.
