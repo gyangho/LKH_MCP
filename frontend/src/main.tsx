@@ -32,6 +32,28 @@ type CodexTask = {
   error?: string;
   actor?: string;
 };
+type CodexAgent = {
+  agent_id: string;
+  last_seen_at: number;
+  seconds_since_seen: number;
+  online: boolean;
+  busy: boolean;
+  projects: string[];
+  capabilities: {
+    git_installed: boolean;
+    codex_installed: boolean;
+    codex_authenticated: boolean;
+    graphify_installed: boolean;
+  };
+  current_task: { id: string; project: string; kind: string } | null;
+};
+type CodexAgentsResponse = {
+  enabled: boolean;
+  token_configured: boolean;
+  online_window_seconds: number;
+  server_time: number;
+  agents: CodexAgent[];
+};
 type Status = {
   cpu_percent?: number;
   memory_mb?: number;
@@ -62,7 +84,7 @@ const labels: Record<Page, string> = {
   overview: "서버 모니터링",
   tools: "도구 권한",
   config: "환경 설정",
-  codex: "Codex 승인",
+  codex: "Codex 관리",
 };
 const paths: Record<Page, string> = {
   overview: "/admin",
@@ -478,9 +500,11 @@ function Config({
 }
 function Codex({
   tasks,
+  agents,
   refresh,
 }: {
   tasks: CodexTask[];
+  agents: CodexAgentsResponse | null;
   refresh: () => void;
 }) {
   const [saving, setSaving] = useState("");
@@ -507,6 +531,44 @@ function Codex({
   }
   return (
     <>
+      <section className="panel">
+        <div className="heading">
+          <h2>Windows Codex Agent 연결</h2>
+          <span className={"tag" + (agents?.agents.some((a) => a.online) ? "" : " bad")}>
+            {agents?.agents.some((a) => a.online) ? "Online" : "Offline"}
+          </span>
+        </div>
+        {agents && !agents.enabled && (
+          <p className="muted">환경 설정에서 CODEX_AGENT_ENABLED를 활성화해야 합니다.</p>
+        )}
+        {agents && !agents.token_configured && (
+          <p className="muted">서버의 CODEX_AGENT_TOKEN이 설정되지 않았습니다.</p>
+        )}
+        {!agents || agents.agents.length === 0 ? (
+          <p className="muted">등록된 Agent가 없습니다. Windows Agent를 실행하고 Heartbeat를 확인하세요.</p>
+        ) : (
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr><th>Agent</th><th>상태</th><th>마지막 접속</th><th>Codex</th><th>프로젝트 / 작업</th></tr>
+              </thead>
+              <tbody>
+                {agents.agents.map((a) => (
+                  <tr key={a.agent_id}>
+                    <td><strong>{a.agent_id}</strong></td>
+                    <td>{a.online ? (a.busy ? "Busy" : "Online") : "Offline"}</td>
+                    <td>{new Date(a.last_seen_at * 1000).toLocaleString("ko-KR")} ({a.seconds_since_seen}초 전)</td>
+                    <td>{!a.capabilities.codex_installed ? "미설치" :
+                         a.capabilities.codex_authenticated ? "인증 확인" : "인증 필요"}</td>
+                    <td>{a.projects.join(", ")}{a.current_task ? ` · ${a.current_task.project}/${a.current_task.kind}` : ""}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        <p className="muted">온라인 기준: 최근 {agents?.online_window_seconds ?? 45}초 이내 인증된 Heartbeat. CLI 설치·로그인 상태는 Agent가 보고합니다.</p>
+      </section>
       <div className="info">
         Windows Agent만 로컬 Git Pull·테스트·Graphify에 접근합니다. 수정
         작업(fix)은 관리자 승인 후 격리된 임시 워크트리에서만 수행하며, 실제
@@ -587,6 +649,7 @@ function App() {
     >([]),
     [secret, setSecret] = useState({ oracle: false, local_admin: false }),
     [tasks, setTasks] = useState<CodexTask[]>([]),
+    [agents, setAgents] = useState<CodexAgentsResponse | null>(null),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false);
   const refresh = useCallback(async () => {
@@ -601,6 +664,7 @@ function App() {
           secrets_configured: { oracle: boolean; local_admin: boolean };
         }>("/admin/api/config"),
         api<{ tasks: CodexTask[] }>("/admin/api/codex/tasks"),
+        api<CodexAgentsResponse>("/admin/api/codex/agents"),
       ]);
       for (let i = 0; i < result.length; i++) {
         const r = result[i];
@@ -618,6 +682,7 @@ function App() {
             setSecret(c.secrets_configured);
           }
           if (i === 3) setTasks((r.value as { tasks: CodexTask[] }).tasks);
+          if (i === 4) setAgents(r.value as CodexAgentsResponse);
         }
       }
       const failed = result.filter((r) => r.status === "rejected");
@@ -724,7 +789,7 @@ function App() {
             refresh={() => void refresh()}
           />
         ) : (
-          <Codex tasks={tasks} refresh={() => void refresh()} />
+          <Codex tasks={tasks} agents={agents} refresh={() => void refresh()} />
         )}
         <footer>
           © LKH MCP · Private Operations · NanumSquare (NAVER, SIL OFL 1.1)

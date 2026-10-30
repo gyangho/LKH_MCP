@@ -83,3 +83,54 @@ Test both a successful/failed queued task, unauthorized agent token, rejected di
 **Unverified until deployment:** real Windows Codex CLI sandbox behavior, Graphify skill build output format, Naru-to-Windows loopback connectivity, Oracle, live WARP policy, and browser UI. Tests inside the ZIP use isolated fake settings and never execute Codex/Git against a user's checkout. No background orchestration or spontaneous ChatGPT notification is provided; status must be queried by a follow-up request.
 
 The local verification workspace may lack ignored test fixtures, credentials and Python environments; Codex must report tests it could not actually execute. Windows Codex `workspace-write` sandbox guarantees vary by host/configuration; least-privilege OS account isolation remains mandatory.
+
+
+## Phase 0 — Agent heartbeat and connection diagnostics
+
+After deploying the Phase 0 server and updating `windows_agent/agent.py` on Windows,
+restart the Windows Agent with the existing `--config` argument. Its heartbeat thread
+uses the **same existing** `CODEX_AGENT_TOKEN` / `LKH_CODEX_AGENT_TOKEN` pair.
+No new network listener, public port, or credential is required.
+
+- The Agent sends a heartbeat to `POST /admin/agent/heartbeat` every 5–60 seconds
+  (the same interval as its polling configuration, default 10 seconds), even while Codex is busy.
+- The server checks the bearer token, `CODEX_AGENT_ENABLED`, allowed project aliases,
+  and a strict set of boolean capabilities. It never accepts arbitrary shell commands.
+- The authenticated administrator can read `GET /admin/api/codex/agents`;
+  the existing `/admin/codex` page shows each Agent's last heartbeat and readiness.
+- **Online** requires an authenticated heartbeat in the last 45 seconds. A registered
+  Agent is **Offline** when it stops reporting; prior heartbeat history alone does not
+  prove the actual process is currently running.
+- `git_installed`, `codex_installed`, `codex_authenticated` (the exit status of
+  `codex login status`), and `graphify_installed` are reported by the local Agent,
+  not verified independently by the server. The Agent rechecks approximately every
+  120 seconds. CLI stdout/stderr and credential material are never uploaded.
+- `Busy` is derived from an actively claimed MCP task, not an arbitrary client flag.
+  This phase does **not** stream Codex CLI execution events; that belongs to Phase 1.
+
+### Non-destructive connection check
+
+From the LKH_MCP checkout, verify that `windows_agent/config.json` and local
+`LKH_CODEX_AGENT_TOKEN` are already configured without printing secrets:
+
+```powershell
+Test-NetConnection 127.0.0.1 -Port 8001
+python .\windows_agent\agent.py --config .\windows_agent\config.json --once
+```
+
+A single-shot Agent may have a short-lived Online status; the continuous Agent
+process is needed for continuous monitoring:
+
+```powershell
+python .\windows_agent\agent.py --config .\windows_agent\config.json
+```
+
+The UI may show `Offline` until both the updated MCP container and Agent are running.
+A `401` heartbeat rejection means incorrect/missing agent token; `403` means
+the Agent feature is disabled; `400` means invalid or unapproved Agent metadata.
+No token or CLI output is returned in these diagnostics.
+
+The agent uses the same private port `127.0.0.1:8001` as before. If Naru does not
+forward that loopback port to Windows, fix the private forwarding path first.
+Do **not** expose the Agent endpoints over a public tunnel or use plaintext HTTP
+to a non-loopback host. Preserve the existing SQLite Docker volume during upgrades.
