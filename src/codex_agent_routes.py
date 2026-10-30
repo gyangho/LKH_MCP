@@ -12,6 +12,29 @@ from codex_presence import heartbeat
 
 
 def register_agent_routes(mcp: Any) -> None:
+
+    @mcp.custom_route("/admin/agent/events", methods=["POST"])
+    async def agent_events(request: Request):
+        headers = {"Cache-Control": "no-store"}
+        if not check_agent_token(request.headers.get("authorization", "")):
+            return JSONResponse({"error": "unauthorized"}, status_code=401, headers=headers)
+        try:
+            if request.headers.get("content-type", "").split(";")[0].strip() != "application/json":
+                raise ValueError("JSON required")
+            raw = await request.body()
+            if not 1 <= len(raw) <= 8192:
+                raise ValueError("Event payload too large")
+            data = json.loads(raw)
+            if not isinstance(data, dict) or set(data) != {"task_id", "lease", "agent_id", "events"}:
+                raise ValueError("Unexpected event fields")
+            from codex_events import append
+            return JSONResponse(append(data["task_id"], data["agent_id"],
+                                       data["lease"], data["events"]), headers=headers)
+        except PermissionError:
+            return JSONResponse({"error": "lease denied"}, status_code=403, headers=headers)
+        except (ValueError, TypeError, KeyError):
+            return JSONResponse({"error": "invalid events"}, status_code=400, headers=headers)
+
     @mcp.custom_route("/admin/agent/heartbeat", methods=["POST"])
     async def agent_heartbeat(request: Request):
         headers = {"Cache-Control": "no-store"}

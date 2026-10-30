@@ -15,6 +15,20 @@ from codex_presence import agents_snapshot
 
 
 def register_codex_admin_routes(mcp):
+
+    @mcp.custom_route('/admin/api/codex/events/{task_id}', methods=['GET'])
+    async def events(request: Request):
+        try:
+            _verify_access(request)
+            from codex_events import read
+            cursor = int(request.query_params.get("after", "0"))
+            return _private(JSONResponse(read(request.path_params["task_id"], cursor)))
+        except (AdminNotConfigured, AdminUnauthorized) as exc:
+            return _private(_auth_response(exc, request))
+        except (TypeError, ValueError):
+            return _private(JSONResponse({"error": "invalid event cursor or task"}, status_code=400))
+
+
     @mcp.custom_route('/admin/codex', methods=['GET'])
     async def page(request: Request):
         try:
