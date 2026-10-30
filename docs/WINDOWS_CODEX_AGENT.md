@@ -166,3 +166,19 @@ python -c "from windows_agent.agent import safe_env; print('SystemDrive:', safe_
 A correct result is the actual Windows installation drive (often `C:`).
 Restart the existing Windows Agent after updating its code; the running Python
 process does not automatically reload modifications from Git.
+
+### Windows environment key casing
+
+On Windows, `os.environ` may normalize the key name to `SYSTEMDRIVE`. The
+older `safe_env()` copied that key without changing its case. Therefore a
+diagnostic such as `safe_env().get('SystemDrive')` can misleadingly show
+`None` even though the child process receives `SYSTEMDRIVE=C:`. Inspect
+the filtered keys case-insensitively before concluding the value is missing:
+
+```powershell
+python -c "from windows_agent.agent import safe_env; print([(k,v) for k,v in safe_env().items() if k.upper() == 'SYSTEMDRIVE'])"
+```
+
+This patch also normalizes the allowed key to `SystemDrive` on Windows,
+so the earlier diagnostic returns the actual system drive. A running Agent
+must be restarted for any source change to take effect.

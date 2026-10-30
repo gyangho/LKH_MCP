@@ -122,6 +122,19 @@ class WindowsAgentTests(unittest.TestCase):
         self.assertNotIn('CODEX_AGENT_TOKEN', env)
         self.assertNotIn('LKH_CODEX_AGENT_TOKEN', env)
 
+    def test_safe_env_normalizes_windows_uppercase_systemdrive(self):
+        # Windows os.environ typically normalizes its keys to uppercase.
+        with patch.object(self.agent.sys, "platform", "win32"):
+            with patch.dict(os.environ, {
+                'SYSTEMDRIVE': 'C:',
+                'SYSTEMROOT': r'C:\\Windows',
+                'LKH_CODEX_AGENT_TOKEN': 'private-token',
+            }, clear=True):
+                env = self.agent.safe_env()
+        self.assertEqual(env['SystemDrive'], 'C:')
+        self.assertEqual(len([k for k in env if k.upper() == 'SYSTEMDRIVE']), 1)
+        self.assertNotIn('LKH_CODEX_AGENT_TOKEN', env)
+
     def test_safe_env_restores_missing_systemdrive_from_systemroot(self):
         with patch.object(self.agent.sys, "platform", "win32"):
             with patch.dict(os.environ, {
@@ -131,7 +144,7 @@ class WindowsAgentTests(unittest.TestCase):
             }, clear=True):
                 env = self.agent.safe_env()
         self.assertEqual(env['SystemDrive'], 'D:')
-        self.assertEqual(env['SystemRoot'], r'D:\\Windows')
+        self.assertEqual(next(v for k, v in env.items() if k.upper() == 'SYSTEMROOT'), r'D:\\Windows')
         self.assertNotIn('CODEX_AGENT_TOKEN', env)
 
     def test_safe_env_uses_windir_if_systemroot_is_missing(self):
