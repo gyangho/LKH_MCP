@@ -46,7 +46,7 @@ jobs:
         shell: pwsh
         run: |
           $env:PYTHONPATH = "src"
-          python -m pip install -r requirements.txt -r requirements-native-build.txt
+          python -m pip install -r requirements.txt
           python -m unittest discover -s tests -t . -p 'test_native_*.py' -v
       - name: Build unsigned native preview and check bundled assets
         shell: pwsh
@@ -85,6 +85,15 @@ jobs:
               catch { $status = [int]$_.Exception.Response.StatusCode }
               if ($status -ne $entry.Expected) { throw "Route leakage $uri got $status" }
             }
+            $trayState = Invoke-WebRequest "http://127.0.0.1:18081/admin/host/tray-state" -TimeoutSec 3 -UseBasicParsing
+            if ($trayState.StatusCode -ne 200 -or
+                ($trayState.Content | ConvertFrom-Json).state -notin @("unknown", "offline")) {
+              throw "Local Agent status must not report unauthenticated Online"
+            }
+            $leakCode = 0
+            try { Invoke-WebRequest "http://127.0.0.1:18080/admin/host/tray-state" -UseBasicParsing -TimeoutSec 3 | Out-Null }
+            catch { $leakCode = [int]$_.Exception.Response.StatusCode }
+            if ($leakCode -ne 404) { throw "MCP port leaked Agent status endpoint" }
             if (-not (Test-Path "$env:LKH_NATIVE_STATE_DIR/data/mcp.sqlite3")) {
               throw "Native staging SQLite was not initialized"
             }
@@ -141,7 +150,57 @@ jobs:
           Copy-Item "dist/LKH-MCP-Tray" (Join-Path $stage "LKH-MCP-Tray") -Recurse
           $registered = $false
           try {
-            ./scripts/install-agent-task.ps1 -InstallDir $stage -AgentUser $agentUser
+            ./scripts/install-agent-task.ps1 -InstallDir $stage -AgentUser $agentUser `
+              -ProjectAlias "LKH_MCP" -Repository "gyangho/LKH_MCP" -CheckoutPath "$PWD"
+            $cfg = Get-Content "$env:ProgramData/LKH-MCP/config/agent.json" -Raw | ConvertFrom-Json
+            if ($cfg.server_url -ne "http://127.0.0.1:18081" -or
+                $cfg.agent_id -notmatch '^win-[0-9a-f]{12}
+            $registered = $true
+            if (-not (Get-ScheduledTask -TaskName "LKH-Codex-Agent" -ErrorAction Stop)) {
+              throw "Agent task not registered"
+            }
+            if (-not (Get-ScheduledTask -TaskName "LKH-MCP-Tray" -ErrorAction Stop)) {
+              throw "Tray logon task not registered"
+            }
+          } finally {
+            foreach ($task in @("LKH-Codex-Agent", "LKH-MCP-Tray")) {
+              Unregister-ScheduledTask -TaskName $task -Confirm:$false -ErrorAction SilentlyContinue
+            }
+          }
+      - name: Compile preview Installer (no installation)
+        shell: pwsh
+        run: |
+          $compiler = "C:\\Program Files (x86)\\Inno Setup 6\\ISCC.exe"
+          if (-not (Test-Path $compiler)) {
+            choco install innosetup --no-progress -y
+            if ($LASTEXITCODE -ne 0) { throw "Inno Setup installation failed" }
+          }
+          & $compiler "installer\\LKH-MCP.iss"
+          if ($LASTEXITCODE -ne 0) { throw "Inno Setup compile failed" }
+          if (-not (Test-Path "dist/installer/LKH-MCP-Setup-UNSIGNED.exe")) {
+            throw "Installer file missing"
+          }
+      - name: Upload unsigned installer (staging only)
+        uses: actions/upload-artifact@v4
+        with:
+          name: lkh-mcp-setup-unsigned-staging
+          path: dist/installer/*.exe
+          if-no-files-found: error
+          retention-days: 7
+      - name: Upload unsigned preview bundle for inspection only
+        uses: actions/upload-artifact@v4
+        with:
+          name: lkh-mcp-native-server-preview-unsigned
+          path: dist/LKH-MCP-Server/
+          if-no-files-found: error
+          retention-days: 7
+ -or
+                $cfg.projects.LKH_MCP.repository -ne "gyangho/LKH_MCP") {
+              throw "Installer staging Agent config invalid"
+            }
+            if ((Get-ScheduledTask -TaskName "LKH-Codex-Agent").State -eq "Disabled") {
+              throw "Agent task unexpectedly disabled after initial config"
+            }
             $registered = $true
             if (-not (Get-ScheduledTask -TaskName "LKH-Codex-Agent" -ErrorAction Stop)) {
               throw "Agent task not registered"

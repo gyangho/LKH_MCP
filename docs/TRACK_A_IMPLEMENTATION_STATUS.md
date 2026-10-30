@@ -13,10 +13,10 @@ enrollment and SQLite migration are **not production released**.
 | I1 | `native_runtime.py`, `native_server.py`, `native_gateway.py`; 127.0.0.1:18080 MCP-only, :18081 Admin-only, route guards; PyInstaller onedir bundle | Windows CLI smoke and 404 route checks; Oracle 11g, UIUX frozen parity and real host still pending |
 | I2 | `native_service.py`: distinct SCM host process, child server lifecycle, service stop signal. Installed as `LKH-MCP-Server` under LocalService by Installer | Service install/start/reboot/logoff/recovery/ACL under actual Windows account |
 | I3 | `native_task_control.py`, `native_host_routes.py`, `scripts/install-agent-task.ps1`; fixed task only, authenticated CSRF API, busy guard | Real LocalService task SDDL, Windows Agent repo config, interactive login, restart/stop E2E |
-| I4 | `native_tray.py`, `scripts/generate_icon.py`: same approved Pixel Pig silhouette recolored green/pink/gray; server-derived authenticated-heartbeat status (not mere scheduler Running), separate tray, fixed task control | Pixel legibility at 16px, notification UI, tray autostart, offline/unknown behavior on host |
+| I4 | `native_tray.py`, `scripts/generate_icon.py`: same approved Pixel Pig pixels recolored green/pink/gray, separate tray, start/stop via fixed task | Pixel legibility at 16px, notification UI, tray autostart, offline/unknown behavior on host |
 | I5 | `native_enrollment.py`, `native_enrollment_routes.py`, Agent token refresh: installer provisions machine-DPAPI device credential + SHA verifier, short-lived session API, admin-only rotate | Win11 DPAPI/ACL cross-account proof, rotation failure atomicity, binding to expected Agent ID, authenticated challenge-response upgrade and threat review |
 | I6 | `installer/LKH-MCP.iss`, `scripts/build-native-suite.ps1`, Windows native dependency list, preflight + fixed task registration | Inno compilation, admin credential onboarding wizard, clean VM install/upgrade/uninstall, code signing, SBOM |
-| I7 | `native_migration.py`: read-only SQLite inspect + Backup API staging copy, integrity/row counts/logical SHA-256 digest, no overwrites; dry-run first | Source Docker volume export, actual backup restore, Cloudflare/port cutover & rollback in maintenance window with **separate user approval** |
+| I7 | `native_migration.py`: read-only SQLite inspect + backup API staging copy, integrity/row counts, no overwrites; dry-run first | Source Docker volume export, actual backup restore, Cloudflare/port cutover & rollback in maintenance window with **separate user approval** |
 
 ## Build a staging-only unsigned suite
 
@@ -63,7 +63,8 @@ exposes that endpoint on the MCP listener or a non-loopback interface.
 **Open security gates:** DPAPI machine scope is *not* a hardware-bound,
 non-exportable device key; stolen machine-level secrets can be abused if OS
 privileges are compromised. No challenge/nonce exists yet and token replay
-within TTL is possible; scope is one host/loopback only. Credential rotation preserves the prior file DACL and attempts credential restoration on a database write error; it still uses a file+SQLite transition, not an atomic cross-resource transaction.
+within TTL is possible; scope is one host/loopback only. Credential rotation
+uses a file+SQLite transition, not an atomic cross-resource transaction.
 Do NOT expose native port 18081 over WARP/Cloudflare until enrollment and
 public access policy have passed threat review. The old Docker token method
 is unchanged while Native is isolated.
@@ -101,9 +102,10 @@ Windows service stop, and Cloudflare private route restoration.
 
 These code deliverables are checkpoints, not user authorization to deploy.
 
-## Subsequent hardening (2026-10-30)
+## October 30 follow-up: first-run setup and heartbeat CI gate
 
-- **I4 Pig state bug corrected:** Windows task `Running` alone is insufficient for green. A native **loopback-only** `GET /admin/host/tray-state` reports only `online/offline/unknown` and `busy`, calculated from authenticated Agent presence and Task Scheduler status. Missing heartbeat yields pink, unavailable service/task yields gray. Does not expose token or Agent ID.
-- **I5 rotation robustness:** reissued machine-DPAPI file retains the previous encrypted file's Windows DACL (including selected Agent account read ACE), and recovers previous encrypted file if its SQLite update raises. Power loss between file update and DB commit is still a separate recovery case, not fully atomic.
-- **I7 content validation:** logical SHA-256 of streamed SQLite dump, including schema and row contents, is compared in addition to table counts and `PRAGMA integrity_check`. Equal counts but different data are rejected.
-- CI success only establishes isolated Windows Runner behavior. Installer UAC/silent/upgrade/uninstall, real Corp Windows login, Oracle Thick and Naru/Cloudflare switch remain unverified.
+- Refac CI at `630a5ffb`: Python, Frontend, Gateway and Windows Native Suite **PASS**, including Windows Service lifecycle, real DPAPI roundtrip, fixed Agent/Tray task registration, SQLite snapshot and unsigned Inno compilation.
+- The native tray's Pixel Pig state now uses the server-derived heartbeat verdict at loopback-only `/admin/host/tray-state`, not Task Scheduler Running alone. Green requires a valid recent authenticated heartbeat; task Running without Agent heartbeat remains pink.
+- Initial Agent JSON configuration is created in `install-agent-task.ps1` **before** task registration, rather than in Installer `ssPostInstall` after the task might have been disabled. If a project checkout is omitted, the Agent task remains disabled; the Pig tray remains independently registered. Existing config is not overwritten, and new Agent IDs are randomized.
+- Windows CI now checks that the initial Agent configuration is created, matches the repo and private port, leaves the task enabled, and that heartbeat state stays private to the Admin listener. Re-run still required before treating this change as verified.
+- These checks do not authorize deployment to the user's PC, Cloudflare cutover or production DB migration. The full device security and real Oracle/Windows desktop gates remain open.

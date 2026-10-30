@@ -44,7 +44,7 @@ Name: "{group}\Uninstall LKH MCP"; Filename: "{uninstallexe}"
 Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File ""{app}\scripts\native-installer-preflight.ps1"" -InstallDir ""{app}"""; Flags: runhidden waituntilterminated
 Filename: "{app}\LKH-MCP-Admin-Setup\LKH-MCP-Admin-Setup.exe"; Parameters: "--initialize"; Flags: waituntilterminated
 Filename: "{app}\LKH-MCP-Enroll\LKH-MCP-Enroll.exe"; Parameters: "--provision"; Flags: runhidden waituntilterminated
-Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File ""{app}\scripts\install-agent-task.ps1"" -InstallDir ""{app}"" -AgentUser ""{code:GetAgentUser}"""; Flags: runhidden waituntilterminated
+Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File ""{app}\scripts\install-agent-task.ps1"" -InstallDir ""{app}"" -AgentUser ""{code:GetAgentUser}"" -ProjectAlias ""{code:GetProjectAlias}"" -Repository ""{code:GetRepository}"" -CheckoutPath ""{code:GetCheckoutPath}"""; Flags: runhidden waituntilterminated
 Filename: "{app}\LKH-MCP-Service\LKH-MCP-Service.exe"; Parameters: "--startup auto --username ""NT AUTHORITY\LocalService"" install"; Flags: runhidden waituntilterminated
 Filename: "{app}\LKH-MCP-Service\LKH-MCP-Service.exe"; Parameters: "start"; Flags: runhidden waituntilterminated
 Filename: "{app}\LKH-MCP-Tray\LKH-MCP-Tray.exe"; Description: "Start Pixel Pig tray"; Flags: nowait postinstall skipifsilent runasoriginaluser
@@ -82,28 +82,50 @@ begin
   Result := AgentPage.Values[0];
 end;
 
-function JsonString(S: String): String;
+function GetProjectAlias(Param: String): String;
 begin
-  StringChangeEx(S, '\', '\\', True);
-  StringChangeEx(S, '"', '\"', True);
-  StringChangeEx(S, #13, '', True);
-  StringChangeEx(S, #10, '', True);
-  Result := '"' + S + '"';
+  Result := Trim(ProjectPage.Values[0]);
 end;
 
-procedure CurStepChanged(CurStep: TSetupStep);
-var
-  Path, Contents, ProjectPath: String;
+function GetRepository(Param: String): String;
 begin
-  if CurStep <> ssPostInstall then Exit;
-  ProjectPath := Trim(ProjectPage.Values[2]);
-  if ProjectPath = '' then Exit;
-  Path := ExpandConstant('{commonappdata}\LKH-MCP\config\agent.json');
-  if FileExists(Path) then Exit;
-  Contents := '{"server_url":"http://127.0.0.1:18081","agent_id":"win-dev-01",' +
-    '"poll_interval_seconds":10,"projects":{' + JsonString(ProjectPage.Values[0]) +
-    ':{"repository":' + JsonString(ProjectPage.Values[1]) +
-    ',"path":' + JsonString(ProjectPath) + '}}}';
-  if not SaveStringToFile(Path, Contents, False) then
-    RaiseException('Failed to create initial Codex Agent project config');
+  Result := Trim(ProjectPage.Values[1]);
+end;
+
+function GetCheckoutPath(Param: String): String;
+begin
+  Result := Trim(ProjectPage.Values[2]);
+end;
+
+function NextButtonClick(CurPageID: Integer): Boolean;
+var
+  AccountName, Checkout: String;
+begin
+  Result := True;
+  if CurPageID = AgentPage.ID then begin
+    AccountName := Trim(AgentPage.Values[0]);
+    if (AccountName = '') or (Pos('"', AccountName) > 0) or
+       (Pos(';', AccountName) > 0) then begin
+      MsgBox('Provide a valid Windows Agent username.', mbError, MB_OK);
+      Result := False;
+    end;
+  end;
+  if CurPageID = ProjectPage.ID then begin
+    Checkout := Trim(ProjectPage.Values[2]);
+    if (Pos('"', ProjectPage.Values[0]) > 0) or
+       (Pos('"', ProjectPage.Values[1]) > 0) or
+       (Pos('"', Checkout) > 0) then begin
+      MsgBox('Double quotes are not allowed in project settings.', mbError, MB_OK);
+      Result := False;
+    end;
+    if Checkout <> '' then begin
+      if Length(Checkout) < 3 then begin
+        MsgBox('The project checkout must be an absolute local Windows path.', mbError, MB_OK);
+        Result := False;
+      end else if (Checkout[2] <> ':') or (Checkout[3] <> '\') then begin
+        MsgBox('The project checkout must be an absolute local Windows path.', mbError, MB_OK);
+        Result := False;
+      end;
+    end;
+  end;
 end;
