@@ -40,22 +40,19 @@ Name: "{group}\LKH MCP Tray"; Filename: "{app}\LKH-MCP-Tray\LKH-MCP-Tray.exe"
 Name: "{group}\Open LKH MCP Admin"; Filename: "http://127.0.0.1:18081/admin"
 Name: "{group}\Uninstall LKH MCP"; Filename: "{uninstallexe}"
 
-[Registry]
-Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "LKH-MCP-Tray"; ValueData: """{app}\LKH-MCP-Tray\LKH-MCP-Tray.exe"""; Flags: uninsdeletevalue
-
 [Run]
 Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File ""{app}\scripts\native-installer-preflight.ps1"" -InstallDir ""{app}"""; Flags: runhidden waituntilterminated
 Filename: "{app}\LKH-MCP-Admin-Setup\LKH-MCP-Admin-Setup.exe"; Parameters: "--initialize"; Flags: waituntilterminated
 Filename: "{app}\LKH-MCP-Enroll\LKH-MCP-Enroll.exe"; Parameters: "--provision"; Flags: runhidden waituntilterminated
 Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File ""{app}\scripts\install-agent-task.ps1"" -InstallDir ""{app}"" -AgentUser ""{code:GetAgentUser}"""; Flags: runhidden waituntilterminated
-Filename: "{app}\LKH-MCP-Service\LKH-MCP-Service.exe"; Parameters: "install --startup auto --username ""NT AUTHORITY\LocalService"""; Flags: runhidden waituntilterminated
+Filename: "{app}\LKH-MCP-Service\LKH-MCP-Service.exe"; Parameters: "--startup auto --username ""NT AUTHORITY\LocalService"" install"; Flags: runhidden waituntilterminated
 Filename: "{app}\LKH-MCP-Service\LKH-MCP-Service.exe"; Parameters: "start"; Flags: runhidden waituntilterminated
-Filename: "{app}\LKH-MCP-Tray\LKH-MCP-Tray.exe"; Description: "Start Pixel Pig tray"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\LKH-MCP-Tray\LKH-MCP-Tray.exe"; Description: "Start Pixel Pig tray"; Flags: nowait postinstall skipifsilent runasoriginaluser
 
 [UninstallRun]
 Filename: "{app}\LKH-MCP-Service\LKH-MCP-Service.exe"; Parameters: "stop"; Flags: runhidden waituntilterminated
 Filename: "{app}\LKH-MCP-Service\LKH-MCP-Service.exe"; Parameters: "remove"; Flags: runhidden waituntilterminated
-Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ""Unregister-ScheduledTask -TaskName 'LKH-Codex-Agent' -Confirm:$false -ErrorAction SilentlyContinue"""; Flags: runhidden waituntilterminated
+Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ""Unregister-ScheduledTask -TaskName 'LKH-Codex-Agent' -Confirm:$false -ErrorAction SilentlyContinue; Unregister-ScheduledTask -TaskName 'LKH-MCP-Tray' -Confirm:$false -ErrorAction SilentlyContinue"""; Flags: runhidden waituntilterminated
 
 [Code]
 var

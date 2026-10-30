@@ -106,7 +106,7 @@ jobs:
             ./scripts/native-installer-preflight.ps1 -InstallDir "$PWD"
             & $enroll --provision
             if ($LASTEXITCODE -ne 0) { throw "Device provisioning failed" }
-            & $svc install --startup auto --username 'NT AUTHORITY\LocalService'
+            & $svc --startup auto --username 'NT AUTHORITY\LocalService' install
             if ($LASTEXITCODE -ne 0) { throw "Service registration failed" }
             $registered = $true
             & $svc start

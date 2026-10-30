@@ -39,4 +39,11 @@ $com.Connect()
 $registered = $com.GetFolder("\").GetTask("LKH-Codex-Agent")
 $descriptor = $registered.GetSecurityDescriptor(4)
 $registered.SetSecurityDescriptor($descriptor + "(A;;GRGX;;;LS)", 0)
-Write-Host "Task registered for $AgentUser. Agent account must be logged in and authorized."
+# Per-user Tray auto-start is a separate scheduled task, not an HKCU entry
+# owned by whatever administrator elevated the Installer.
+$trayExe = Join-Path $InstallDir "LKH-MCP-Tray\\LKH-MCP-Tray.exe"
+if (-not (Test-Path -LiteralPath $trayExe)) { throw "Installed Tray EXE missing" }
+$trayAction = New-ScheduledTaskAction -Execute $trayExe -WorkingDirectory (Split-Path $trayExe)
+$traySettings = New-ScheduledTaskSettingsSet -MultipleInstances IgnoreNew
+Register-ScheduledTask -TaskName "LKH-MCP-Tray" -Action $trayAction -Trigger $trigger -Principal $principal -Settings $traySettings -Force | Out-Null
+Write-Host "Agent and Tray tasks registered for $AgentUser."
