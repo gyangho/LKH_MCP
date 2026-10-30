@@ -80,32 +80,8 @@ curl.exe -i http://192.0.1.22:8001/admin
 
 An unauthenticated GET to /admin should return **303 to /admin/login**, not the old Cloudflare Access JWT 403. The React frontend may require internet access for jsDelivr font, but application assets are served locally.
 
-## SQLite settings and worker restrictions
+## Windows Codex Agent bridge (replaces the legacy Docker worker)
 
-SQLite state is stored in `/app/data/mcp.sqlite3` on the `mcp-data` named volume. Settings live under `/admin/config`: Git allowlisted repos and flags; Graphify configuration; Codex opt-in and daily limits; Oracle connection (read-only). Oracle secrets must remain in bootstrap and must not be displayed by the UI.
+Local Git/Graphify tools and the Docker Codex debugging worker are no longer registered. The Docker MCP server provides a durable SQLite work queue and serves compressed Graphify snapshots without touching working trees. Windows Codex Agent alone performs local pull, tests, diagnostics and Graphify builds. Fix requests require administrator approval and are performed only in disposable worktrees.
 
-To mount project working trees, create a local untracked `compose.override.yaml` specifying only approved source folders. Do not expose the Docker socket, Oracle credentials or GitHub PAT to the Codex worker.
-
-Codex worker is disabled by default. Create an internal authentication token at `secrets/codex_worker_token` then use:
-
-```powershell
-python -c "import secrets,pathlib;pathlib.Path('secrets/codex_worker_token').write_text(secrets.token_hex(32),encoding='utf-8')"
-docker --context naru compose -f compose.yaml -f compose.codex.yaml --profile codex up -d --build
-```
-
-The workflow is request debug → approve run → inspect result/diff → separately approve patch application. Git commit/push require additional explicit user authorization. No worker is allowed to receive Docker credentials, Oracle secrets or a writable Git source by default.
-
-## Verification
-
-```powershell
-cd frontend
-npm install
-npm run build
-cd ..
-python -m compileall -q src tests
-$env:PYTHONPATH='src'
-python -m unittest discover -s tests -t . -p 'test_*.py' -v
-docker --context naru compose -f compose.yaml config
-```
-
-Back up SQLite with its backup API or after stopping the container; copying only a live WAL-backed file is unsafe. Confirm origin login/expiry/logout, CSRF rejection, Gateway denied identity, MCP `/mcp` transport and gateway 8000/8001 route isolation.
+See [Windows Codex Agent setup](WINDOWS_CODEX_AGENT.md) for token generation, private network connectivity, Windows Task Scheduler, new tools, Graphify commit SHA tracking and verification. **Never start the legacy compose.codex.yaml worker as part of the new workflow.** Existing SQLite named volume and bootstrap secrets must be preserved.
