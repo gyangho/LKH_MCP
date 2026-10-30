@@ -47,6 +47,12 @@ type CodexAgent = {
   };
   current_task: { id: string; project: string; kind: string } | null;
 };
+type CodexTokenStatus = {
+  configured: boolean;
+  source: "bootstrap" | "managed" | "revoked" | "none";
+  updated_at: number | null;
+  updated_by: string | null;
+};
 type CodexAgentsResponse = {
   enabled: boolean;
   token_configured: boolean;
@@ -501,13 +507,39 @@ function Config({
 function Codex({
   tasks,
   agents,
+  tokenStatus,
   refresh,
 }: {
   tasks: CodexTask[];
   agents: CodexAgentsResponse | null;
+  tokenStatus: CodexTokenStatus | null;
   refresh: () => void;
 }) {
   const [saving, setSaving] = useState("");
+  const [issuedToken, setIssuedToken] = useState("");
+  const [tokenBusy, setTokenBusy] = useState(false);
+  async function manageToken(action: "rotate" | "revoke") {
+    const message = action === "rotate"
+      ? "새 인증 토큰을 발급하면 이전 토큰이 즉시 무효화되고 Windows Agent 연결이 중단됩니다. 계속할까요?"
+      : "현재 인증 토큰을 폐기하면 Windows Agent가 연결할 수 없습니다. 폐기할까요?";
+    if (!confirm(message)) return;
+    setIssuedToken("");
+    setTokenBusy(true);
+    try {
+      if (action === "rotate") {
+        const result = await api<{token: string; status: CodexTokenStatus}>(
+          "/admin/api/codex/token/rotate", {confirm: "ROTATE"});
+        setIssuedToken(result.token);
+      } else {
+        await api("/admin/api/codex/token/revoke", {confirm: "REVOKE"});
+      }
+      refresh();
+    } catch (e) {
+      alert((e as Error).message);
+    } finally {
+      setTokenBusy(false);
+    }
+  }
   async function decide(id: string, action: string) {
     if (
       !confirm(
@@ -531,6 +563,54 @@ function Codex({
   }
   return (
     <>
+      <section className="panel">
+        <div className="heading">
+          <h2>Codex Agent 인증 토큰</h2>
+          <span className={"tag" + (!tokenStatus?.configured ? " bad" : "")}>
+            {tokenStatus?.configured ? "설정됨" : "미설정/폐기"}
+          </span>
+        </div>
+        <p className="muted">
+          토큰 상태: {tokenStatus?.source === "managed" ? "관리자 발급 토큰" :
+          tokenStatus?.source === "bootstrap" ? "기존 bootstrap 토큰" :
+          tokenStatus?.source === "revoked" ? "폐기됨" : "없음"}
+          {tokenStatus?.updated_at ? " · 변경: " +
+            new Date(tokenStatus.updated_at * 1000).toLocaleString("ko-KR") : ""}
+        </p>
+        <p className="muted">
+          새 토큰은 서버의 영구 SQLite에 해시로 저장되며, 원문은 발급 직후 한 번만 표시합니다.
+          교체/폐기하면 기존 Windows Agent 토큰은 즉시 무효화됩니다.
+        </p>
+        <div className="actions">
+          <Button disabled={tokenBusy} onClick={() => void manageToken("rotate")}>
+            {tokenStatus?.configured ? "토큰 재발급" : "새 토큰 발급"}
+          </Button>
+          {tokenStatus?.configured && (
+            <Button danger disabled={tokenBusy} onClick={() => void manageToken("revoke")}>
+              토큰 폐기
+            </Button>
+          )}
+        </div>
+        {issuedToken && (
+          <div className="panel" role="status">
+            <strong>1회 표시되는 새 토큰 — 안전한 위치에 보관하세요</strong>
+            <p className="muted">
+              Windows의 ignored 파일 windows_agent/token.json에
+              { ' {"token":"발급된_토큰"}' } 형태로 저장하세요. 다른 사람과 공유하지 마세요.
+            </p>
+            <textarea aria-label="새 Codex Agent 인증 토큰" readOnly
+              value={issuedToken} rows={2}
+              style={{width: "100%", resize: "none", boxSizing: "border-box"}} />
+            <div className="actions">
+              <Button onClick={() => {
+                void navigator.clipboard.writeText(issuedToken).catch(() =>
+                  alert("자동 복사가 차단되었습니다. 토큰을 직접 복사하세요."));
+              }}>토큰 복사</Button>
+              <Button onClick={() => setIssuedToken("")}>토큰 표시 닫기</Button>
+            </div>
+          </div>
+        )}
+      </section>
       <section className="panel">
         <div className="heading">
           <h2>Windows Codex Agent 연결</h2>
@@ -650,6 +730,7 @@ function App() {
     [secret, setSecret] = useState({ oracle: false, local_admin: false }),
     [tasks, setTasks] = useState<CodexTask[]>([]),
     [agents, setAgents] = useState<CodexAgentsResponse | null>(null),
+    [tokenStatus, setTokenStatus] = useState<CodexTokenStatus | null>(null),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false);
   const refresh = useCallback(async () => {
@@ -665,6 +746,7 @@ function App() {
         }>("/admin/api/config"),
         api<{ tasks: CodexTask[] }>("/admin/api/codex/tasks"),
         api<CodexAgentsResponse>("/admin/api/codex/agents"),
+        api<CodexTokenStatus>("/admin/api/codex/token"),
       ]);
       for (let i = 0; i < result.length; i++) {
         const r = result[i];
@@ -683,6 +765,7 @@ function App() {
           }
           if (i === 3) setTasks((r.value as { tasks: CodexTask[] }).tasks);
           if (i === 4) setAgents(r.value as CodexAgentsResponse);
+          if (i === 5) setTokenStatus(r.value as CodexTokenStatus);
         }
       }
       const failed = result.filter((r) => r.status === "rejected");
@@ -789,7 +872,8 @@ function App() {
             refresh={() => void refresh()}
           />
         ) : (
-          <Codex tasks={tasks} agents={agents} refresh={() => void refresh()} />
+          <Codex tasks={tasks} agents={agents} tokenStatus={tokenStatus}
+            refresh={() => void refresh()} />
         )}
         <footer>
           © LKH MCP · Private Operations · NanumSquare (NAVER, SIL OFL 1.1)
