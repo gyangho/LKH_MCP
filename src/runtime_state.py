@@ -1,10 +1,8 @@
 """LKH MCP 0.0.1 — bounded, argument-free operational telemetry and runtime flags."""
 from __future__ import annotations
 
-import asyncio
 import functools
 import inspect
-import json
 import os
 import threading
 import time
@@ -17,12 +15,6 @@ from typing import Any
 from version import VERSION
 import settings_store
 
-FLAGS = ("GIT_ALLOW_COMMIT", "GIT_ALLOW_PUSH", "GRAPHIFY_ALLOW_UPDATE")
-_FLAG_META = {
-    "GIT_ALLOW_COMMIT": ("Git commit", "로컬 코드 스테이징과 커밋"),
-    "GIT_ALLOW_PUSH": ("Git push", "원격 GitHub 브랜치에 push"),
-    "GRAPHIFY_ALLOW_UPDATE": ("Graphify update", "프로젝트 그래프 갱신"),
-}
 _START = time.monotonic()
 _LOCK = threading.RLock()
 _ACTIVE: dict[str, dict] = {}
@@ -39,10 +31,6 @@ def state_dir() -> Path:
         return Path(override).expanduser().resolve()
     base = os.environ.get("LOCALAPPDATA") or str(Path.home() / ".local" / "share")
     return Path(base) / "LKH_MCP"
-
-
-def _config_path() -> Path:
-    return state_dir() / "runtime-settings.json"
 
 
 def initialize_state() -> None:

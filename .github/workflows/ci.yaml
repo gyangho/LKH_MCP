@@ -30,8 +30,8 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
       - name: Syntax
-        run: python -m compileall -q server.py src worker tests
-      - name: Unit and isolated Git tests
+        run: python -m compileall -q server.py src windows_agent tests
+      - name: Unit and Windows Agent tests
         run: python -m unittest discover -s tests -t . -p "test_*.py" -v
 
   gateway:
@@ -44,9 +44,7 @@ jobs:
         run: |
           mkdir -p secrets
           printf '{"ADMIN_LOGIN_USER":"ci","ADMIN_PASSWORD_HASH":"placeholder","ADMIN_PUBLIC_ORIGIN":"http://192.0.1.22:8001"}\n' > secrets/bootstrap.json
-          printf 'ci-only-placeholder-0123456789abcdefgh\n' > secrets/codex_worker_token
           docker compose -f compose.yaml config --quiet
-          docker compose -f compose.yaml -f compose.codex.yaml --profile codex config --quiet
       - name: Validate Nginx syntax and non-root permissions
         run: |
           docker run --rm --user 101:101 --read-only --cap-drop ALL \

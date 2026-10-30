@@ -15,14 +15,7 @@ _READY = False
 
 # key: (category, label, type, default, description)
 FIELDS = {
-    "GIT_ALLOW_COMMIT": ("git", "로컬 커밋", "bool", False, "Git 스테이징과 AI 리뷰 커밋 허용"),
-    "GIT_ALLOW_PUSH": ("git", "GitHub Push", "bool", False, "확인된 HEAD의 fast-forward push 허용"),
     "GIT_ALLOWED_REPOS": ("git", "허용 Git 저장소", "text", "", "PROJECT=owner/repo;..."),
-    "GIT_EXECUTABLE": ("git", "Git 실행 파일", "text", "", "비우면 PATH에서 검색"),
-    "GRAPHIFY_ALLOW_UPDATE": ("graphify", "그래프 갱신", "bool", False, "코드 그래프 변경 허용"),
-    "GRAPHIFY_PROJECTS": ("projects", "프로젝트 경로", "text", "", "PROJECT=/projects/name;..."),
-    "GRAPHIFY_EXECUTABLE": ("graphify", "Graphify 실행 파일", "text", "", "비우면 PATH에서 검색"),
-    "CODEX_DELEGATION_ENABLED": ("codex", "Codex 디버깅 위임", "bool", False, "관리자 승인 후에만 실행"),
     "CODEX_AGENT_ENABLED": ("codex", "Windows Codex Agent 허용", "bool", False, "Windows Agent 작업 요청 허용"),
     "CODEX_MAX_RUNS_PER_DAY": ("codex", "일일 Codex 실행 제한", "int", 30, "1~100회"),
     "ORACLE_HOST": ("oracle", "Oracle 주소", "text", "127.0.0.1", "Docker라면 host.docker.internal 또는 DB 주소"),
@@ -35,7 +28,7 @@ FIELDS = {
     "ORACLE_CLIENT_LIB_DIR": ("oracle", "Oracle Client 디렉터리", "text", "", "Thick 모드 사용 시 컨테이너 경로"),
 }
 SECRETS = frozenset({"ORACLE_PASSWORD", "ADMIN_CF_TEAM", "ADMIN_CF_AUD", "ADMIN_ALLOWED_EMAILS", "ADMIN_PUBLIC_ORIGIN", "ADMIN_PASSWORD_HASH", "ADMIN_LOGIN_USER", "CODEX_AGENT_TOKEN"})
-_PATH_FIELDS = {"GIT_EXECUTABLE", "GRAPHIFY_EXECUTABLE", "ORACLE_CLIENT_LIB_DIR"}
+_PATH_FIELDS = {"ORACLE_CLIENT_LIB_DIR"}
 _BOOL_FIELDS = {key for key, item in FIELDS.items() if item[2] == "bool"}
 
 
@@ -74,7 +67,7 @@ def _validate(key: str, value: Any) -> Any:
             raise ValueError("설정 텍스트 길이 또는 문자 제한 위반")
         if key in _PATH_FIELDS and value and not Path(value).is_absolute():
             raise ValueError("경로는 절대 경로여야 합니다.")
-        if key in ("GRAPHIFY_PROJECTS", "GIT_ALLOWED_REPOS") and value:
+        if key == "GIT_ALLOWED_REPOS" and value:
             entries = value.split(";")
             if len(entries) > 10:
                 raise ValueError("프로젝트는 최대 10개입니다.")

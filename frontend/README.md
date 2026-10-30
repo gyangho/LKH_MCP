@@ -1,7 +1,9 @@
-# LKH MCP admin frontend
+# Admin frontend
 
-React 19 + TypeScript + Vite admin SPA. The Python MCP server serves the built files under /admin; no extra browser-facing ports.
+React 19, TypeScript and Vite. Build with `cd frontend && npm ci && npm run build`.
 
-Build: `cd frontend && npm install && npm run build`. Naru Docker image builds frontend automatically.
+Production currently serves generated assets from Python behind the private Naru gateway. Do not commit `frontend/dist`.
 
-NanumSquare by NAVER (SIL OFL 1.1): https://help.naver.com/service/30016/contents/18088 . The CSS loads public hosted webfont from moonspam/NanumSquare; no font binaries are copied into this repository. Ensure the private WARP clients can access jsDelivr, or install NanumSquare locally (fallback: Malgun Gothic). License notice in `frontend/NANUMSQUARE-LICENSE.md`.
+For current operations, read [OPERATIONS](../docs/OPERATIONS.md). For Windows Native Installer plans, see [ROADMAP](../docs/ROADMAP.md). Agent start/stop and JSONL live console are planned, not implemented.
+
+NanumSquare font licensing: [NANUMSQUARE-LICENSE.md](NANUMSQUARE-LICENSE.md). The app falls back to Malgun Gothic when the webfont is unavailable.

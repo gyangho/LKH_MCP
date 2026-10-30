@@ -94,8 +94,6 @@ const paths: Record<Page, string> = {
 };
 const categories: Record<string, string> = {
   git: "Git",
-  graphify: "Graphify",
-  projects: "프로젝트",
   codex: "Codex",
   oracle: "Oracle",
 };
