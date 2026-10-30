@@ -8,6 +8,7 @@ must never travel off loopback. This is a single-host first release.
 from __future__ import annotations
 
 import hashlib
+from contextlib import contextmanager
 import hmac
 import os
 import secrets
@@ -24,6 +25,7 @@ def _paths(root: Path | None = None):
     return root / "config" / "agent-credential.bin", root / "data" / "mcp.sqlite3"
 
 
+@contextmanager
 def _connect(root: Path | None = None):
     _, database = _paths(root)
     database.parent.mkdir(parents=True, exist_ok=True)
@@ -37,7 +39,11 @@ def _connect(root: Path | None = None):
     db.execute("""CREATE TABLE IF NOT EXISTS native_agent_sessions (
         verifier TEXT PRIMARY KEY, expires_at INTEGER NOT NULL
     )""")
-    return db
+    try:
+        with db:
+            yield db
+    finally:
+        db.close()
 
 
 def _protect(secret: bytes) -> bytes:

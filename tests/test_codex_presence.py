@@ -186,7 +186,7 @@ class WindowsDiagnosticsTests(unittest.TestCase):
     def test_once_initial_heartbeat_is_synchronous(self):
         import inspect
         source = inspect.getsource(self.agent.main)
-        self.assertLess(source.index("send_heartbeat(base, agent_id, projects, capabilities, token)"),
+        self.assertLess(source.index("send_heartbeat(base, agent_id, projects, capabilities, current_token())"),
                         source.index("presence_thread.start()"))
         self.assertIn("heartbeat_interval = min(interval, 15)", source)
 

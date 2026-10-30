@@ -7,6 +7,7 @@ and does NOT perform production cutover or Cloudflare changes.
 from __future__ import annotations
 
 import argparse
+from contextlib import closing
 import json
 import os
 import sqlite3
@@ -20,7 +21,7 @@ def inspect_database(path: Path) -> dict:
     if not path.is_file():
         raise FileNotFoundError("Source SQLite file not found")
     uri = "file:" + quote(str(path).replace("\\", "/"), safe="/:") + "?mode=ro"
-    with sqlite3.connect(uri, uri=True, timeout=15) as db:
+    with closing(sqlite3.connect(uri, uri=True, timeout=15)) as db:
         integrity = db.execute("PRAGMA integrity_check").fetchone()[0]
         if integrity != "ok":
             raise ValueError("SQLite integrity check failed")
@@ -48,8 +49,8 @@ def copy_snapshot(source: Path, destination: Path) -> dict:
     temporary = destination.parent / (destination.name + "." + uuid.uuid4().hex + ".partial")
     uri = "file:" + quote(str(source).replace("\\", "/"), safe="/:") + "?mode=ro"
     try:
-        with sqlite3.connect(uri, uri=True, timeout=15) as src:
-            with sqlite3.connect(str(temporary), timeout=15) as dst:
+        with closing(sqlite3.connect(uri, uri=True, timeout=15)) as src:
+            with closing(sqlite3.connect(str(temporary), timeout=15)) as dst:
                 src.backup(dst, pages=128, sleep=0.1)
         migrated = inspect_database(temporary)
         if migrated["tables"] != original["tables"]:
