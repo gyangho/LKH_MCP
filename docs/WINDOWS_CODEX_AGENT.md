@@ -134,3 +134,17 @@ The agent uses the same private port `127.0.0.1:8001` as before. If Naru does no
 forward that loopback port to Windows, fix the private forwarding path first.
 Do **not** expose the Agent endpoints over a public tunnel or use plaintext HTTP
 to a non-loopback host. Preserve the existing SQLite Docker volume during upgrades.
+
+### Windows MXC `SystemDrive` compatibility
+
+On Windows 11 with Codex 0.165.0, the native MXC sandbox may fail before
+command execution with `MXC requires nonempty Unicode host SystemDrive`.
+The Windows Agent must propagate the existing Windows `SystemDrive` variable
+(usually `C:`) to its **allowlisted** subprocess environment. This is supported
+by `windows_agent/agent.py`; it still strips agent tokens and other secrets.
+
+If you enable MXC with `[features] prefer_mxc = true` in your local
+`%USERPROFILE%\.codex\config.toml`, update the Windows Agent code to include
+the `SystemDrive` fix before re-running queued verification. Installing MXC or
+configuring it does not by itself fix an old Agent that strips the environment.
+The server still only receives the final bounded verification report.
