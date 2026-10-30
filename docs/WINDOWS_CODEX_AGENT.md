@@ -92,8 +92,8 @@ restart the Windows Agent with the existing `--config` argument. Its heartbeat t
 uses the **same existing** `CODEX_AGENT_TOKEN` / `LKH_CODEX_AGENT_TOKEN` pair.
 No new network listener, public port, or credential is required.
 
-- The Agent sends a heartbeat to `POST /admin/agent/heartbeat` every 5–60 seconds
-  (the same interval as its polling configuration, default 10 seconds), even while Codex is busy.
+- The Agent sends a heartbeat to `POST /admin/agent/heartbeat` every 5–15 seconds
+  (capped at 15s even if work polling is configured for 60s; default 10s), even while Codex is busy.
 - The server checks the bearer token, `CODEX_AGENT_ENABLED`, allowed project aliases,
   and a strict set of boolean capabilities. It never accepts arbitrary shell commands.
 - The authenticated administrator can read `GET /admin/api/codex/agents`;

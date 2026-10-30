@@ -183,6 +183,13 @@ class WindowsDiagnosticsTests(unittest.TestCase):
                               side_effect=__import__("subprocess").TimeoutExpired("codex", 10)):
                 self.assertFalse(self.agent.probe_capabilities()["codex_authenticated"])
 
+    def test_once_initial_heartbeat_is_synchronous(self):
+        import inspect
+        source = inspect.getsource(self.agent.main)
+        self.assertLess(source.index("send_heartbeat(base, agent_id, projects, capabilities, token)"),
+                        source.index("presence_thread.start()"))
+        self.assertIn("heartbeat_interval = min(interval, 15)", source)
+
     def test_heartbeat_only_sends_allowlisted_metadata(self):
         with patch.object(self.agent, "post_json", return_value={"ok": True}) as send:
             self.assertTrue(self.agent.send_heartbeat(

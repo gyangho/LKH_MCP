@@ -296,13 +296,16 @@ def main() -> None:
     projects = list(cfg["projects"])
     stop = threading.Event()
 
-    # Heartbeat thread continues while Codex executes a long-running job.
-    # Periodically recheck login/CLI status, never include login output.
+    # Send the first heartbeat synchronously: --once must prove connectivity.
+    # Keep the background period <= 15s so a 60s work poll cannot appear offline.
+    heartbeat_interval = min(interval, 15)
+    capabilities = probe_capabilities()
+    last_probe = time.monotonic()
+    send_heartbeat(base, agent_id, projects, capabilities, token)
+
     def maintain_presence() -> None:
-        capabilities = probe_capabilities()
-        last_probe = time.monotonic()
-        send_heartbeat(base, agent_id, projects, capabilities, token)
-        while not stop.wait(interval):
+        nonlocal capabilities, last_probe
+        while not stop.wait(heartbeat_interval):
             if time.monotonic() - last_probe >= 120:
                 capabilities = probe_capabilities()
                 last_probe = time.monotonic()
