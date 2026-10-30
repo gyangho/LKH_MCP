@@ -91,6 +91,45 @@ jobs:
           } finally {
             Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
           }
+      - name: Windows DPAPI local encryption roundtrip
+        shell: pwsh
+        run: |
+          $env:PYTHONPATH = "src"
+          python -c "from native_enrollment import _protect, _unprotect; import secrets; raw=secrets.token_bytes(32); assert _unprotect(_protect(raw)) == raw; print('DPAPI_OK')"
+      - name: Smoke-test Windows SCM lifecycle on ephemeral runner
+        shell: pwsh
+        run: |
+          $svc = Join-Path $PWD "dist/LKH-MCP-Service/LKH-MCP-Service.exe"
+          $enroll = Join-Path $PWD "dist/LKH-MCP-Enroll/LKH-MCP-Enroll.exe"
+          $registered = $false
+          try {
+            ./scripts/native-installer-preflight.ps1 -InstallDir "$PWD"
+            & $enroll --provision
+            if ($LASTEXITCODE -ne 0) { throw "Device provisioning failed" }
+            & $svc install --startup auto --username 'NT AUTHORITY\LocalService'
+            if ($LASTEXITCODE -ne 0) { throw "Service registration failed" }
+            $registered = $true
+            & $svc start
+            if ($LASTEXITCODE -ne 0) { throw "Service start failed" }
+            $ready = $false
+            for ($i=0; $i -lt 30; $i++) {
+              try {
+                $res = Invoke-WebRequest -Uri "http://127.0.0.1:18081/admin/healthz" -TimeoutSec 2 -UseBasicParsing
+                if ($res.StatusCode -eq 200) { $ready = $true; break }
+              } catch { }
+              Start-Sleep -Seconds 1
+            }
+            if (-not $ready) {
+              Get-Content "$env:ProgramData/LKH-MCP/logs/service-supervisor.log" -Tail 30 -ErrorAction SilentlyContinue
+              Get-Content "$env:ProgramData/LKH-MCP/logs/server.log" -Tail 30 -ErrorAction SilentlyContinue
+              throw "Windows SCM server did not start"
+            }
+          } finally {
+            if ($registered) {
+              & $svc stop
+              & $svc remove
+            }
+          }
       - name: Compile preview Installer (no installation)
         shell: pwsh
         run: |
