@@ -154,7 +154,14 @@ jobs:
               -ProjectAlias "LKH_MCP" -Repository "gyangho/LKH_MCP" -CheckoutPath "$PWD"
             $cfg = Get-Content "$env:ProgramData/LKH-MCP/config/agent.json" -Raw | ConvertFrom-Json
             if ($cfg.server_url -ne "http://127.0.0.1:18081" -or
-                $cfg.agent_id -notmatch '^win-[0-9a-f]{12}
+                $cfg.agent_id -notlike "win-*" -or
+                $cfg.agent_id.Length -ne 16 -or
+                $cfg.projects.LKH_MCP.repository -ne "gyangho/LKH_MCP") {
+              throw "Installer staging Agent config invalid"
+            }
+            if ((Get-ScheduledTask -TaskName "LKH-Codex-Agent").State -eq "Disabled") {
+              throw "Agent task unexpectedly disabled after initial config"
+            }
             $registered = $true
             if (-not (Get-ScheduledTask -TaskName "LKH-Codex-Agent" -ErrorAction Stop)) {
               throw "Agent task not registered"
