@@ -1,65 +1,740 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { createRoot } from 'react-dom/client';
-import './style.css';
+import React, { useCallback, useEffect, useState } from "react";
+import { createRoot } from "react-dom/client";
+import "./style.css";
 
-type Page = 'overview'|'tools'|'config'|'codex';
-type SettingsItem = {key:string;category:string;label:string;type:string;value:unknown;enabled:boolean|null;revision:number;description:string};
-type Flag = {key:string;label:string;description:string;enabled:boolean};
-type CodexTask = {id:string;project:string;repository:string;branch:string;expected_sha:string;kind:string;state:string;created_at:number;report?:string;error?:string;actor?:string};
-type Status = {cpu_percent?:number;memory_mb?:number;active_count?:number;requests?:{total:number;failed:number};version?:string;uptime_seconds?:number;threads?:number;pid?:number;viewer?:string;active?:Array<{tool:string;started_at:string;elapsed_seconds:number}>;recent?:Array<{tool:string;time:string;status:string;duration_ms:number;detail?:string}>;server_time?:string};
-const currentPage = ():Page => location.pathname.includes('/codex')?'codex':location.pathname.includes('/config')?'config':'overview';
-const labels:Record<Page,string>={overview:'서버 모니터링',tools:'도구 권한',config:'환경 설정',codex:'Codex 승인'};
-const paths:Record<Page,string>={overview:'/admin',tools:'/admin?view=tools',config:'/admin/config',codex:'/admin/codex'};
-const categories:Record<string,string>={git:'Git',graphify:'Graphify',projects:'프로젝트',codex:'Codex',oracle:'Oracle'};
-async function api<T>(path:string, body?:unknown):Promise<T>{
-  const response=await fetch(path,{method:body===undefined?'GET':'POST',credentials:'same-origin',cache:'no-store',headers:body===undefined?{}:{'Content-Type':'application/json','X-LKH-Admin-Action':'1'},body:body===undefined?undefined:JSON.stringify(body)});
-  if(response.status===401 && path!=='/admin/api/login'){location.replace('/admin/login');throw Error('관리자 로그인이 필요합니다.');}
-  if(!response.ok){const error=await response.json().catch(()=>({error:'요청 실패'})) as {error?:string};throw Error(error.error||'요청 실패 ('+response.status+')');}
-  return await response.json() as T;
+type Page = "overview" | "tools" | "config" | "codex";
+type SettingsItem = {
+  key: string;
+  category: string;
+  label: string;
+  type: string;
+  value: unknown;
+  enabled: boolean | null;
+  revision: number;
+  description: string;
+};
+type Flag = {
+  key: string;
+  label: string;
+  description: string;
+  enabled: boolean;
+};
+type CodexTask = {
+  id: string;
+  project: string;
+  repository: string;
+  branch: string;
+  expected_sha: string;
+  kind: string;
+  state: string;
+  created_at: number;
+  report?: string;
+  error?: string;
+  actor?: string;
+};
+type Status = {
+  cpu_percent?: number;
+  memory_mb?: number;
+  active_count?: number;
+  requests?: { total: number; failed: number };
+  version?: string;
+  uptime_seconds?: number;
+  threads?: number;
+  pid?: number;
+  viewer?: string;
+  active?: Array<{ tool: string; started_at: string; elapsed_seconds: number }>;
+  recent?: Array<{
+    tool: string;
+    time: string;
+    status: string;
+    duration_ms: number;
+    detail?: string;
+  }>;
+  server_time?: string;
+};
+const currentPage = (): Page =>
+  location.pathname.includes("/codex")
+    ? "codex"
+    : location.pathname.includes("/config")
+      ? "config"
+      : "overview";
+const labels: Record<Page, string> = {
+  overview: "서버 모니터링",
+  tools: "도구 권한",
+  config: "환경 설정",
+  codex: "Codex 승인",
+};
+const paths: Record<Page, string> = {
+  overview: "/admin",
+  tools: "/admin?view=tools",
+  config: "/admin/config",
+  codex: "/admin/codex",
+};
+const categories: Record<string, string> = {
+  git: "Git",
+  graphify: "Graphify",
+  projects: "프로젝트",
+  codex: "Codex",
+  oracle: "Oracle",
+};
+async function api<T>(path: string, body?: unknown): Promise<T> {
+  const response = await fetch(path, {
+    method: body === undefined ? "GET" : "POST",
+    credentials: "same-origin",
+    cache: "no-store",
+    headers:
+      body === undefined
+        ? {}
+        : { "Content-Type": "application/json", "X-LKH-Admin-Action": "1" },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  if (response.status === 401 && path !== "/admin/api/login") {
+    location.replace("/admin/login");
+    throw Error("관리자 로그인이 필요합니다.");
+  }
+  if (!response.ok) {
+    const error = (await response
+      .json()
+      .catch(() => ({ error: "요청 실패" }))) as { error?: string };
+    throw Error(error.error || "요청 실패 (" + response.status + ")");
+  }
+  return (await response.json()) as T;
 }
-function Button({children,onClick,disabled=false,danger=false}:{children:React.ReactNode;onClick:()=>void;disabled?:boolean;danger?:boolean}){
- return <button type="button" className={'button'+(danger?' danger':'')} disabled={disabled} onClick={onClick}>{children}</button>;
+function Button({
+  children,
+  onClick,
+  disabled = false,
+  danger = false,
+}: {
+  children: React.ReactNode;
+  onClick: () => void;
+  disabled?: boolean;
+  danger?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      className={"button" + (danger ? " danger" : "")}
+      disabled={disabled}
+      onClick={onClick}
+    >
+      {children}
+    </button>
+  );
 }
-function Login(){
-  const [password,setPassword]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState('');
-  async function signIn(e:React.FormEvent){e.preventDefault();setBusy(true);setError('');try{await api('/admin/api/login',{password});location.replace('/admin');}catch(err){setError(String((err as Error).message));setPassword('');}finally{setBusy(false);}}
-  return <main className="auth-page"><form className="login-card" onSubmit={signIn}><div className="brandmark">L</div><p className="eyebrow">PRIVATE OPERATIONS</p><h1>LKH MCP 관리자</h1><p className="hint">WARP 사설 네트워크에서만 접근할 수 있습니다. 관리자 비밀번호로 로그인하세요.</p><label htmlFor="password">관리자 비밀번호</label><input id="password" name="password" autoFocus type="password" autoComplete="current-password" minLength={14} value={password} onChange={e=>setPassword(e.target.value)} required/><button className="button primary full" type="submit" disabled={busy}>{busy?'인증 중…':'로그인'}</button>{error&&<p className="error" role="alert">{error}</p>}<small>접속 제한 · HttpOnly 세션 · 4시간 자동 만료</small></form></main>;
+function Login() {
+  const [password, setPassword] = useState(""),
+    [busy, setBusy] = useState(false),
+    [error, setError] = useState("");
+  async function signIn(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setError("");
+    try {
+      await api("/admin/api/login", { password });
+      location.replace("/admin");
+    } catch (err) {
+      setError(String((err as Error).message));
+      setPassword("");
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <main className="auth-page">
+      <form className="login-card" onSubmit={signIn}>
+        <div className="brandmark">L</div>
+        <p className="eyebrow">PRIVATE OPERATIONS</p>
+        <h1>LKH MCP 관리자</h1>
+        <p className="hint">
+          WARP 사설 네트워크에서만 접근할 수 있습니다. 관리자 비밀번호로
+          로그인하세요.
+        </p>
+        <label htmlFor="password">관리자 비밀번호</label>
+        <input
+          id="password"
+          name="password"
+          autoFocus
+          type="password"
+          autoComplete="current-password"
+          minLength={10}
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          required
+        />
+        <button className="button primary full" type="submit" disabled={busy}>
+          {busy ? "인증 중…" : "로그인"}
+        </button>
+        {error && (
+          <p className="error" role="alert">
+            {error}
+          </p>
+        )}
+        <small>접속 제한 · HttpOnly 세션 · 4시간 자동 만료</small>
+      </form>
+    </main>
+  );
 }
-function Overview({status}:{status:Status|null}){
-  const metrics=[['CPU 사용률',status?.cpu_percent?.toFixed(1)+'%'],['메모리 RSS',status?.memory_mb==null?'—':status.memory_mb+' MB'],['실행 중',String(status?.active_count??'—')],['총 도구 호출',String(status?.requests?.total??'—')]];
-  return <><section className="metrics">{metrics.map(([name,value])=><article className="metric" key={name}><div className="muted">{name}</div><strong>{value==='undefined%'?'—':value}</strong></article>)}</section><section className="columns"><article className="panel"><h2>서버 상태</h2><dl className="facts">{Object.entries({'상태':status?'운영 중':'연결 확인 중','버전':status?.version??'—','업타임':status?.uptime_seconds==null?'—':Math.floor(status.uptime_seconds/60)+'분','프로세스':status?.pid??'—','스레드':status?.threads??'—','접속 관리자':status?.viewer??'—'}).map(([k,v])=><div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}</dl></article><article className="panel"><h2>최근 활동</h2><div className="activity">{status?.recent?.length?status.recent.slice(0,12).map((x,i)=><div className="activity-row" key={i}><strong>{x.tool}</strong><small>{x.status==='error'?'실패':'완료'} · {x.duration_ms}ms · {new Date(x.time).toLocaleString('ko-KR')}</small></div>):<p className="muted">최근 작업이 없습니다.</p>}</div></article></section><section className="panel"><h2>진행 중인 도구 호출</h2><div className="table-wrap"><table><thead><tr><th>도구</th><th>시작 시각</th><th>경과</th></tr></thead><tbody>{status?.active?.length?status.active.map((x,i)=><tr key={i}><td>{x.tool}</td><td>{new Date(x.started_at).toLocaleString('ko-KR')}</td><td>{x.elapsed_seconds}초</td></tr>):<tr><td colSpan={3} className="muted">진행 중인 호출이 없습니다.</td></tr>}</tbody></table></div></section></>;
+function Overview({ status }: { status: Status | null }) {
+  const metrics = [
+    ["CPU 사용률", status?.cpu_percent?.toFixed(1) + "%"],
+    ["메모리 RSS", status?.memory_mb == null ? "—" : status.memory_mb + " MB"],
+    ["실행 중", String(status?.active_count ?? "—")],
+    ["총 도구 호출", String(status?.requests?.total ?? "—")],
+  ];
+  return (
+    <>
+      <section className="metrics">
+        {metrics.map(([name, value]) => (
+          <article className="metric" key={name}>
+            <div className="muted">{name}</div>
+            <strong>{value === "undefined%" ? "—" : value}</strong>
+          </article>
+        ))}
+      </section>
+      <section className="columns">
+        <article className="panel">
+          <h2>서버 상태</h2>
+          <dl className="facts">
+            {Object.entries({
+              상태: status ? "운영 중" : "연결 확인 중",
+              버전: status?.version ?? "—",
+              업타임:
+                status?.uptime_seconds == null
+                  ? "—"
+                  : Math.floor(status.uptime_seconds / 60) + "분",
+              프로세스: status?.pid ?? "—",
+              스레드: status?.threads ?? "—",
+              "접속 관리자": status?.viewer ?? "—",
+            }).map(([k, v]) => (
+              <div key={k}>
+                <dt>{k}</dt>
+                <dd>{v}</dd>
+              </div>
+            ))}
+          </dl>
+        </article>
+        <article className="panel">
+          <h2>최근 활동</h2>
+          <div className="activity">
+            {status?.recent?.length ? (
+              status.recent.slice(0, 12).map((x, i) => (
+                <div className="activity-row" key={i}>
+                  <strong>{x.tool}</strong>
+                  <small>
+                    {x.status === "error" ? "실패" : "완료"} · {x.duration_ms}ms
+                    · {new Date(x.time).toLocaleString("ko-KR")}
+                  </small>
+                </div>
+              ))
+            ) : (
+              <p className="muted">최근 작업이 없습니다.</p>
+            )}
+          </div>
+        </article>
+      </section>
+      <section className="panel">
+        <h2>진행 중인 도구 호출</h2>
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>도구</th>
+                <th>시작 시각</th>
+                <th>경과</th>
+              </tr>
+            </thead>
+            <tbody>
+              {status?.active?.length ? (
+                status.active.map((x, i) => (
+                  <tr key={i}>
+                    <td>{x.tool}</td>
+                    <td>{new Date(x.started_at).toLocaleString("ko-KR")}</td>
+                    <td>{x.elapsed_seconds}초</td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={3} className="muted">
+                    진행 중인 호출이 없습니다.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </>
+  );
 }
-function Tools({items,refresh}:{items:Flag[];refresh:()=>void}){
- const [saving,setSaving]=useState('');
- async function toggle(item:Flag){if(!confirm(item.label+' 기능을 '+(item.enabled?'비활성화':'활성화')+'할까요?'))return;setSaving(item.key);try{await api('/admin/api/flags',{key:item.key,enabled:!item.enabled});refresh();}catch(e){alert((e as Error).message);}finally{setSaving('');}}
- return <section className="panel"><h2>도구별 실행 권한</h2><p className="hint">권한 활성화는 커밋·Push 또는 Codex 작업을 자동 실행하지 않습니다. 실제 실행에는 별도 승인이 필요합니다.</p><div className="setting-list">{items.map(x=><div className="setting-row" key={x.key}><div><strong>{x.label}</strong><p className="muted">{x.description}</p><code>{x.key}</code></div><button type="button" role="switch" aria-checked={x.enabled} aria-label={x.label+' 실행 허용'} className={'switch'+(x.enabled?' on':'')} disabled={saving===x.key} onClick={()=>toggle(x)}><span/></button></div>)}</div>{!items.length&&<p className="muted">도구 정보를 불러오는 중입니다.</p>}</section>;
+function Tools({ items, refresh }: { items: Flag[]; refresh: () => void }) {
+  const [saving, setSaving] = useState("");
+  async function toggle(item: Flag) {
+    if (
+      !confirm(
+        item.label +
+          " 기능을 " +
+          (item.enabled ? "비활성화" : "활성화") +
+          "할까요?",
+      )
+    )
+      return;
+    setSaving(item.key);
+    try {
+      await api("/admin/api/flags", { key: item.key, enabled: !item.enabled });
+      refresh();
+    } catch (e) {
+      alert((e as Error).message);
+    } finally {
+      setSaving("");
+    }
+  }
+  return (
+    <section className="panel">
+      <h2>도구별 실행 권한</h2>
+      <p className="hint">
+        권한 활성화는 커밋·Push 또는 Codex 작업을 자동 실행하지 않습니다. 실제
+        실행에는 별도 승인이 필요합니다.
+      </p>
+      <div className="setting-list">
+        {items.map((x) => (
+          <div className="setting-row" key={x.key}>
+            <div>
+              <strong>{x.label}</strong>
+              <p className="muted">{x.description}</p>
+              <code>{x.key}</code>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={x.enabled}
+              aria-label={x.label + " 실행 허용"}
+              className={"switch" + (x.enabled ? " on" : "")}
+              disabled={saving === x.key}
+              onClick={() => toggle(x)}
+            >
+              <span />
+            </button>
+          </div>
+        ))}
+      </div>
+      {!items.length && <p className="muted">도구 정보를 불러오는 중입니다.</p>}
+    </section>
+  );
 }
-function Config({items,refresh,audit,secret}:{items:SettingsItem[];refresh:()=>void;audit:Array<{key:string;actor:string;at:string}>;secret:{oracle:boolean;local_admin:boolean}}){
- const [category,setCategory]=useState('git');const [draft,setDraft]=useState<Record<string,string>>({});const [saving,setSaving]=useState('');
- const retired=new Set(["GIT_ALLOW_COMMIT","GIT_ALLOW_PUSH","GIT_EXECUTABLE","GRAPHIFY_PROJECTS","GRAPHIFY_EXECUTABLE","GRAPHIFY_ALLOW_UPDATE","CODEX_DELEGATION_ENABLED"]);
-  const chosen=items.filter(x=>x.category===category&&!retired.has(x.key));
- async function save(x:SettingsItem,raw:string){let v:unknown=raw;if(x.type==='bool')v=raw==='true';if(x.type==='int'){v=Number(raw);if(!Number.isInteger(v))return alert('정수를 입력하세요.');}if(!confirm(x.label+' 설정을 저장할까요?'))return;setSaving(x.key);try{await api('/admin/api/config',{key:x.key,value:v,revision:x.revision});refresh();setDraft(prev=>{const next={...prev};delete next[x.key];return next;});}catch(e){alert((e as Error).message);}finally{setSaving('');}}
- return <><section className="metrics triple"><article className="metric"><div className="muted">설정 항목</div><strong>{items.length}</strong></article><article className="metric"><div className="muted">Oracle 비밀정보</div><strong>{secret.oracle?'설정됨':'미설정'}</strong></article><article className="metric"><div className="muted">관리자 인증</div><strong>{secret.local_admin?'설정됨':'미설정'}</strong></article></section><div className="settings-layout"><nav className="category" aria-label="설정 카테고리">{Object.entries(categories).map(([key,label])=><button key={key} type="button" aria-current={category===key?'page':undefined} onClick={()=>setCategory(key)}>{label}</button>)}</nav><section className="panel"><h2>{categories[category]} 설정</h2><p className="hint">민감한 비밀번호는 화면에 표시되지 않습니다. 변경사항은 저장 시 즉시 반영됩니다.</p>{chosen.map(x=>{const value=draft[x.key]??String(x.value??'');return <div className="setting-row" key={x.key}><div><strong>{x.label}</strong><p className="muted">{x.description}</p><code>{x.key}</code></div><div className="setting-input">{x.type==='bool'?<label className="choice"><input type="checkbox" checked={value==='true'} onChange={e=>setDraft(d=>({...d,[x.key]:String(e.target.checked)}))}/> 허용</label>:<input aria-label={x.label} type={x.type==='int'?'number':'text'} value={value} onChange={e=>setDraft(d=>({...d,[x.key]:e.target.value}))}/>}<Button disabled={saving===x.key||value===String(x.value??'')} onClick={()=>save(x,value)}>저장</Button></div></div>})}</section></div><section className="panel"><h2>최근 설정 변경 이력</h2>{audit.length?audit.map((a,i)=><div className="activity-row" key={i}><strong>{a.key} · {a.actor}</strong><small>{new Date(a.at).toLocaleString('ko-KR')}</small></div>):<p className="muted">변경 이력이 없습니다.</p>}</section></>;
+function Config({
+  items,
+  refresh,
+  audit,
+  secret,
+}: {
+  items: SettingsItem[];
+  refresh: () => void;
+  audit: Array<{ key: string; actor: string; at: string }>;
+  secret: { oracle: boolean; local_admin: boolean };
+}) {
+  const [category, setCategory] = useState("git");
+  const [draft, setDraft] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState("");
+  const retired = new Set([
+    "GIT_ALLOW_COMMIT",
+    "GIT_ALLOW_PUSH",
+    "GIT_EXECUTABLE",
+    "GRAPHIFY_PROJECTS",
+    "GRAPHIFY_EXECUTABLE",
+    "GRAPHIFY_ALLOW_UPDATE",
+    "CODEX_DELEGATION_ENABLED",
+  ]);
+  const chosen = items.filter(
+    (x) => x.category === category && !retired.has(x.key),
+  );
+  async function save(x: SettingsItem, raw: string) {
+    let v: unknown = raw;
+    if (x.type === "bool") v = raw === "true";
+    if (x.type === "int") {
+      v = Number(raw);
+      if (!Number.isInteger(v)) return alert("정수를 입력하세요.");
+    }
+    if (!confirm(x.label + " 설정을 저장할까요?")) return;
+    setSaving(x.key);
+    try {
+      await api("/admin/api/config", {
+        key: x.key,
+        value: v,
+        revision: x.revision,
+      });
+      refresh();
+      setDraft((prev) => {
+        const next = { ...prev };
+        delete next[x.key];
+        return next;
+      });
+    } catch (e) {
+      alert((e as Error).message);
+    } finally {
+      setSaving("");
+    }
+  }
+  return (
+    <>
+      <section className="metrics triple">
+        <article className="metric">
+          <div className="muted">설정 항목</div>
+          <strong>{items.length}</strong>
+        </article>
+        <article className="metric">
+          <div className="muted">Oracle 비밀정보</div>
+          <strong>{secret.oracle ? "설정됨" : "미설정"}</strong>
+        </article>
+        <article className="metric">
+          <div className="muted">관리자 인증</div>
+          <strong>{secret.local_admin ? "설정됨" : "미설정"}</strong>
+        </article>
+      </section>
+      <div className="settings-layout">
+        <nav className="category" aria-label="설정 카테고리">
+          {Object.entries(categories).map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              aria-current={category === key ? "page" : undefined}
+              onClick={() => setCategory(key)}
+            >
+              {label}
+            </button>
+          ))}
+        </nav>
+        <section className="panel">
+          <h2>{categories[category]} 설정</h2>
+          <p className="hint">
+            민감한 비밀번호는 화면에 표시되지 않습니다. 변경사항은 저장 시 즉시
+            반영됩니다.
+          </p>
+          {chosen.map((x) => {
+            const value = draft[x.key] ?? String(x.value ?? "");
+            return (
+              <div className="setting-row" key={x.key}>
+                <div>
+                  <strong>{x.label}</strong>
+                  <p className="muted">{x.description}</p>
+                  <code>{x.key}</code>
+                </div>
+                <div className="setting-input">
+                  {x.type === "bool" ? (
+                    <label className="choice">
+                      <input
+                        type="checkbox"
+                        checked={value === "true"}
+                        onChange={(e) =>
+                          setDraft((d) => ({
+                            ...d,
+                            [x.key]: String(e.target.checked),
+                          }))
+                        }
+                      />{" "}
+                      허용
+                    </label>
+                  ) : (
+                    <input
+                      aria-label={x.label}
+                      type={x.type === "int" ? "number" : "text"}
+                      value={value}
+                      onChange={(e) =>
+                        setDraft((d) => ({ ...d, [x.key]: e.target.value }))
+                      }
+                    />
+                  )}
+                  <Button
+                    disabled={
+                      saving === x.key || value === String(x.value ?? "")
+                    }
+                    onClick={() => save(x, value)}
+                  >
+                    저장
+                  </Button>
+                </div>
+              </div>
+            );
+          })}
+        </section>
+      </div>
+      <section className="panel">
+        <h2>최근 설정 변경 이력</h2>
+        {audit.length ? (
+          audit.map((a, i) => (
+            <div className="activity-row" key={i}>
+              <strong>
+                {a.key} · {a.actor}
+              </strong>
+              <small>{new Date(a.at).toLocaleString("ko-KR")}</small>
+            </div>
+          ))
+        ) : (
+          <p className="muted">변경 이력이 없습니다.</p>
+        )}
+      </section>
+    </>
+  );
 }
-function Codex({tasks,refresh}:{tasks:CodexTask[];refresh:()=>void}){
-  const [saving,setSaving]=useState('');
-  async function decide(id:string,action:string){if(!confirm((action==='approve'?'Windows 로컬 Codex 수정 제안 실행':action==='reject'?'작업 거부':'작업 취소')+'을 승인할까요?'))return;setSaving(id);try{await api('/admin/api/codex/decision',{task_id:id,action});refresh();}catch(e){alert((e as Error).message);}finally{setSaving('');}}
-  return <><div className="info">Windows Agent만 로컬 Git Pull·테스트·Graphify에 접근합니다. 수정 작업(fix)은 관리자 승인 후 격리된 임시 워크트리에서만 수행하며, 실제 로컬 저장소에 패치를 적용하거나 Git에 push하지 않습니다.</div><section className="task-grid">{tasks.length?tasks.map(t=><article className="panel" key={t.id}><div className="heading"><h2>{t.project} · {t.kind}</h2><span className="tag">{t.state}</span></div><p className="muted">ID: {t.id} · 요청: {new Date(t.created_at*1000).toLocaleString('ko-KR')} · 요청자: {t.actor||'—'}</p><p className="muted">{t.repository} / {t.branch} · SHA: {t.expected_sha.slice(0,12)}</p>{t.report&&<details><summary>검증·분석 결과</summary><pre>{t.report}</pre></details>}{t.error&&<p className="error">{t.error}</p>}<div className="actions">{t.state==='pending_approval'&&<><Button disabled={saving===t.id} onClick={()=>decide(t.id,'approve')}>로컬 수정 제안 승인</Button><Button danger disabled={saving===t.id} onClick={()=>decide(t.id,'reject')}>거부</Button></>}{t.state==='queued'&&<Button danger disabled={saving===t.id} onClick={()=>decide(t.id,'cancel')}>대기 작업 취소</Button>}</div></article>):<div className="panel muted">Windows Codex 작업이 없습니다.</div>}</section></>;
+function Codex({
+  tasks,
+  refresh,
+}: {
+  tasks: CodexTask[];
+  refresh: () => void;
+}) {
+  const [saving, setSaving] = useState("");
+  async function decide(id: string, action: string) {
+    if (
+      !confirm(
+        (action === "approve"
+          ? "Windows 로컬 Codex 수정 제안 실행"
+          : action === "reject"
+            ? "작업 거부"
+            : "작업 취소") + "을 승인할까요?",
+      )
+    )
+      return;
+    setSaving(id);
+    try {
+      await api("/admin/api/codex/decision", { task_id: id, action });
+      refresh();
+    } catch (e) {
+      alert((e as Error).message);
+    } finally {
+      setSaving("");
+    }
+  }
+  return (
+    <>
+      <div className="info">
+        Windows Agent만 로컬 Git Pull·테스트·Graphify에 접근합니다. 수정
+        작업(fix)은 관리자 승인 후 격리된 임시 워크트리에서만 수행하며, 실제
+        로컬 저장소에 패치를 적용하거나 Git에 push하지 않습니다.
+      </div>
+      <section className="task-grid">
+        {tasks.length ? (
+          tasks.map((t) => (
+            <article className="panel" key={t.id}>
+              <div className="heading">
+                <h2>
+                  {t.project} · {t.kind}
+                </h2>
+                <span className="tag">{t.state}</span>
+              </div>
+              <p className="muted">
+                ID: {t.id} · 요청:{" "}
+                {new Date(t.created_at * 1000).toLocaleString("ko-KR")} ·
+                요청자: {t.actor || "—"}
+              </p>
+              <p className="muted">
+                {t.repository} / {t.branch} · SHA: {t.expected_sha.slice(0, 12)}
+              </p>
+              {t.report && (
+                <details>
+                  <summary>검증·분석 결과</summary>
+                  <pre>{t.report}</pre>
+                </details>
+              )}
+              {t.error && <p className="error">{t.error}</p>}
+              <div className="actions">
+                {t.state === "pending_approval" && (
+                  <>
+                    <Button
+                      disabled={saving === t.id}
+                      onClick={() => decide(t.id, "approve")}
+                    >
+                      로컬 수정 제안 승인
+                    </Button>
+                    <Button
+                      danger
+                      disabled={saving === t.id}
+                      onClick={() => decide(t.id, "reject")}
+                    >
+                      거부
+                    </Button>
+                  </>
+                )}
+                {t.state === "queued" && (
+                  <Button
+                    danger
+                    disabled={saving === t.id}
+                    onClick={() => decide(t.id, "cancel")}
+                  >
+                    대기 작업 취소
+                  </Button>
+                )}
+              </div>
+            </article>
+          ))
+        ) : (
+          <div className="panel muted">Windows Codex 작업이 없습니다.</div>
+        )}
+      </section>
+    </>
+  );
 }
-function App(){
- const login=location.pathname==='/admin/login';
- const [page,setPage]=useState<Page>(location.search.includes('view=tools')?'tools':currentPage());
- const [status,setStatus]=useState<Status|null>(null),[flags,setFlags]=useState<Flag[]>([]),[items,setItems]=useState<SettingsItem[]>([]),[audit,setAudit]=useState<Array<{key:string;actor:string;at:string}>>([]),[secret,setSecret]=useState({oracle:false,local_admin:false}),[tasks,setTasks]=useState<CodexTask[]>([]),[error,setError]=useState(''),[busy,setBusy]=useState(false);
- const refresh=useCallback(async()=>{setBusy(true);try{
-   const result=await Promise.allSettled([api<Status>('/admin/api/status'),api<{flags:Flag[]}>('/admin/api/settings'),api<{settings:SettingsItem[];audit:Array<{key:string;actor:string;at:string}>;secrets_configured:{oracle:boolean;local_admin:boolean}}>('/admin/api/config'),api<{tasks:CodexTask[]}>('/admin/api/codex/tasks')]);
-   for(let i=0;i<result.length;i++){const r=result[i];if(r.status==='fulfilled'){if(i===0)setStatus(r.value as Status);if(i===1)setFlags((r.value as {flags:Flag[]}).flags);if(i===2){const c=r.value as {settings:SettingsItem[];audit:Array<{key:string;actor:string;at:string}>;secrets_configured:{oracle:boolean;local_admin:boolean}};setItems(c.settings);setAudit(c.audit);setSecret(c.secrets_configured);}if(i===3)setTasks((r.value as {tasks:CodexTask[]}).tasks);}}
-   const failed=result.filter(r=>r.status==='rejected');setError(failed.length?failed.map(x=>String((x as PromiseRejectedResult).reason)).join('; '):'');
- }finally{setBusy(false);}},[]);
- useEffect(()=>{if(login)return;void refresh();const timer=setInterval(()=>{if(!document.hidden)void refresh();},10000);return()=>clearInterval(timer);},[login,refresh]);
- useEffect(()=>{if(login)return;const handler=()=>setPage(location.search.includes('view=tools')?'tools':currentPage());window.addEventListener('popstate',handler);return()=>window.removeEventListener('popstate',handler);},[login]);
- function navigate(next:Page){history.pushState(null,'',paths[next]);setPage(next);}
- async function logout(){try{await api('/admin/api/logout',{});location.replace('/admin/login');}catch(e){alert((e as Error).message);}}
- if(login)return <Login/>;
- return <div className="layout"><aside className="sidebar"><div className="brand"><div className="brandmark">L</div><div><strong>LKH MCP</strong><small>PRIVATE CONTROL CENTER</small></div></div><nav aria-label="주 메뉴" className="nav">{(Object.keys(labels) as Page[]).map(key=><button key={key} type="button" aria-current={page===key?'page':undefined} onClick={()=>navigate(key)}>{labels[key]}</button>)}</nav><div className="sidebar-foot"><span className="dot"/> WARP Private Access<p>관리자 세션으로 보호됨</p></div></aside><main className="main"><header className="topbar"><div><div className="eyebrow">INFRASTRUCTURE / OPERATIONS</div><h1>{labels[page]}</h1><p className="muted">LKH MCP 시스템의 상태와 권한을 관리합니다.</p></div><div className="actions"><span className={'tag'+(error?' bad':'')}>{error?'일부 API 오류':busy?'동기화 중':'운영 중'}</span><Button disabled={busy} onClick={()=>void refresh()}>새로고침</Button><Button onClick={()=>void logout()}>로그아웃</Button></div></header>{error&&<div className="error banner" role="alert">{error}</div>}{page==='overview'?<Overview status={status}/>:page==='tools'?<Tools items={flags.filter(x=>x.key==="CODEX_AGENT_ENABLED")} refresh={()=>void refresh()}/>:page==='config'?<Config items={items} audit={audit} secret={secret} refresh={()=>void refresh()}/>:<Codex tasks={tasks} refresh={()=>void refresh()}/>}<footer>© LKH MCP · Private Operations · NanumSquare (NAVER, SIL OFL 1.1)</footer></main></div>;
+function App() {
+  const login = location.pathname === "/admin/login";
+  const [page, setPage] = useState<Page>(
+    location.search.includes("view=tools") ? "tools" : currentPage(),
+  );
+  const [status, setStatus] = useState<Status | null>(null),
+    [flags, setFlags] = useState<Flag[]>([]),
+    [items, setItems] = useState<SettingsItem[]>([]),
+    [audit, setAudit] = useState<
+      Array<{ key: string; actor: string; at: string }>
+    >([]),
+    [secret, setSecret] = useState({ oracle: false, local_admin: false }),
+    [tasks, setTasks] = useState<CodexTask[]>([]),
+    [error, setError] = useState(""),
+    [busy, setBusy] = useState(false);
+  const refresh = useCallback(async () => {
+    setBusy(true);
+    try {
+      const result = await Promise.allSettled([
+        api<Status>("/admin/api/status"),
+        api<{ flags: Flag[] }>("/admin/api/settings"),
+        api<{
+          settings: SettingsItem[];
+          audit: Array<{ key: string; actor: string; at: string }>;
+          secrets_configured: { oracle: boolean; local_admin: boolean };
+        }>("/admin/api/config"),
+        api<{ tasks: CodexTask[] }>("/admin/api/codex/tasks"),
+      ]);
+      for (let i = 0; i < result.length; i++) {
+        const r = result[i];
+        if (r.status === "fulfilled") {
+          if (i === 0) setStatus(r.value as Status);
+          if (i === 1) setFlags((r.value as { flags: Flag[] }).flags);
+          if (i === 2) {
+            const c = r.value as {
+              settings: SettingsItem[];
+              audit: Array<{ key: string; actor: string; at: string }>;
+              secrets_configured: { oracle: boolean; local_admin: boolean };
+            };
+            setItems(c.settings);
+            setAudit(c.audit);
+            setSecret(c.secrets_configured);
+          }
+          if (i === 3) setTasks((r.value as { tasks: CodexTask[] }).tasks);
+        }
+      }
+      const failed = result.filter((r) => r.status === "rejected");
+      setError(
+        failed.length
+          ? failed
+              .map((x) => String((x as PromiseRejectedResult).reason))
+              .join("; ")
+          : "",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }, []);
+  useEffect(() => {
+    if (login) return;
+    void refresh();
+    const timer = setInterval(() => {
+      if (!document.hidden) void refresh();
+    }, 10000);
+    return () => clearInterval(timer);
+  }, [login, refresh]);
+  useEffect(() => {
+    if (login) return;
+    const handler = () =>
+      setPage(location.search.includes("view=tools") ? "tools" : currentPage());
+    window.addEventListener("popstate", handler);
+    return () => window.removeEventListener("popstate", handler);
+  }, [login]);
+  function navigate(next: Page) {
+    history.pushState(null, "", paths[next]);
+    setPage(next);
+  }
+  async function logout() {
+    try {
+      await api("/admin/api/logout", {});
+      location.replace("/admin/login");
+    } catch (e) {
+      alert((e as Error).message);
+    }
+  }
+  if (login) return <Login />;
+  return (
+    <div className="layout">
+      <aside className="sidebar">
+        <div className="brand">
+          <div className="brandmark">L</div>
+          <div>
+            <strong>LKH MCP</strong>
+            <small>PRIVATE CONTROL CENTER</small>
+          </div>
+        </div>
+        <nav aria-label="주 메뉴" className="nav">
+          {(Object.keys(labels) as Page[]).map((key) => (
+            <button
+              key={key}
+              type="button"
+              aria-current={page === key ? "page" : undefined}
+              onClick={() => navigate(key)}
+            >
+              {labels[key]}
+            </button>
+          ))}
+        </nav>
+        <div className="sidebar-foot">
+          <span className="dot" /> WARP Private Access
+          <p>관리자 세션으로 보호됨</p>
+        </div>
+      </aside>
+      <main className="main">
+        <header className="topbar">
+          <div>
+            <div className="eyebrow">INFRASTRUCTURE / OPERATIONS</div>
+            <h1>{labels[page]}</h1>
+            <p className="muted">LKH MCP 시스템의 상태와 권한을 관리합니다.</p>
+          </div>
+          <div className="actions">
+            <span className={"tag" + (error ? " bad" : "")}>
+              {error ? "일부 API 오류" : busy ? "동기화 중" : "운영 중"}
+            </span>
+            <Button disabled={busy} onClick={() => void refresh()}>
+              새로고침
+            </Button>
+            <Button onClick={() => void logout()}>로그아웃</Button>
+          </div>
+        </header>
+        {error && (
+          <div className="error banner" role="alert">
+            {error}
+          </div>
+        )}
+        {page === "overview" ? (
+          <Overview status={status} />
+        ) : page === "tools" ? (
+          <Tools
+            items={flags.filter((x) => x.key === "CODEX_AGENT_ENABLED")}
+            refresh={() => void refresh()}
+          />
+        ) : page === "config" ? (
+          <Config
+            items={items}
+            audit={audit}
+            secret={secret}
+            refresh={() => void refresh()}
+          />
+        ) : (
+          <Codex tasks={tasks} refresh={() => void refresh()} />
+        )}
+        <footer>
+          © LKH MCP · Private Operations · NanumSquare (NAVER, SIL OFL 1.1)
+        </footer>
+      </main>
+    </div>
+  );
 }
-createRoot(document.getElementById('root')!).render(<React.StrictMode><App/></React.StrictMode>);
+createRoot(document.getElementById("root")!).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>,
+);

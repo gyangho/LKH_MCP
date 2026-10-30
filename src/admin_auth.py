@@ -42,7 +42,7 @@ def _origin() -> str:
     return origin
 
 def make_password_hash(password: str, iterations: int = 600000) -> str:
-    if not isinstance(password, str) or not 14 <= len(password) <= 256:
+    if not isinstance(password, str) or not 10 <= len(password) <= 256:
         raise ValueError("Password must be 14-256 characters")
     salt = secrets.token_bytes(16)
     digest = hashlib.pbkdf2_hmac("sha256", password.encode(), salt, iterations)
