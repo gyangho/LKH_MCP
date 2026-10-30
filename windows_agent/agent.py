@@ -8,6 +8,7 @@ from __future__ import annotations
 import argparse
 import base64
 import json
+import ntpath
 import os
 import re
 import shutil
@@ -35,6 +36,26 @@ def safe_env() -> dict[str, str]:
             "COMSPEC", "HOMEDRIVE", "HOMEPATH", "LANG", "LC_ALL", "SSH_AUTH_SOCK",
             "GIT_TERMINAL_PROMPT", "GCM_INTERACTIVE", "CODEX_HOME"}
     env = {k: v for k, v in os.environ.items() if k.upper() in keep}
+    if sys.platform == "win32":
+        # Some Windows launchers omit SystemDrive even though SystemRoot exists.
+        # MXC needs the host's actual system drive; never assume it is C:.
+        def env_get(name: str) -> str:
+            return next((value for key, value in env.items()
+                         if key.upper() == name), "")
+
+        drive = env_get("SYSTEMDRIVE")
+        if not re.fullmatch(r"[A-Za-z]:", drive):
+            for name in ("SYSTEMROOT", "WINDIR"):
+                candidate = ntpath.splitdrive(env_get(name))[0]
+                if re.fullmatch(r"[A-Za-z]:", candidate):
+                    drive = candidate
+                    break
+        if not re.fullmatch(r"[A-Za-z]:", drive):
+            raise RuntimeError("Windows SystemDrive unavailable; check SystemRoot/WINDIR")
+        # Normalize case and spelling; an inherited malformed SystemDrive is never passed on.
+        env = {key: value for key, value in env.items()
+               if key.upper() != "SYSTEMDRIVE"}
+        env["SystemDrive"] = drive.upper()
     env["GIT_TERMINAL_PROMPT"] = "0"
     env["GCM_INTERACTIVE"] = "never"
     return env

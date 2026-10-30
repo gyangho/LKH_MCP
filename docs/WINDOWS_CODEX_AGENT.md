@@ -148,3 +148,37 @@ If you enable MXC with `[features] prefer_mxc = true` in your local
 the `SystemDrive` fix before re-running queued verification. Installing MXC or
 configuring it does not by itself fix an old Agent that strips the environment.
 The server still only receives the final bounded verification report.
+
+### Missing `SystemDrive` in PowerShell or Task Scheduler
+
+An Agent launched from a shell without `SystemDrive` previously forwarded an
+empty value to Codex even when the allowlist included the variable. The Agent now
+reconstructs the drive from the Windows installation directory `SystemRoot`
+(or `WINDIR`), validating the drive letter and refusing to guess or weaken the
+sandbox. If none of these values is valid, fix the Windows session environment.
+
+Before restarting an updated Agent, verify without exposing credentials:
+
+```powershell
+python -c "from windows_agent.agent import safe_env; print('SystemDrive:', safe_env().get('SystemDrive'))"
+```
+
+A correct result is the actual Windows installation drive (often `C:`).
+Restart the existing Windows Agent after updating its code; the running Python
+process does not automatically reload modifications from Git.
+
+### Windows environment key casing
+
+On Windows, `os.environ` may normalize the key name to `SYSTEMDRIVE`. The
+older `safe_env()` copied that key without changing its case. Therefore a
+diagnostic such as `safe_env().get('SystemDrive')` can misleadingly show
+`None` even though the child process receives `SYSTEMDRIVE=C:`. Inspect
+the filtered keys case-insensitively before concluding the value is missing:
+
+```powershell
+python -c "from windows_agent.agent import safe_env; print([(k,v) for k,v in safe_env().items() if k.upper() == 'SYSTEMDRIVE'])"
+```
+
+This patch also normalizes the allowed key to `SystemDrive` on Windows,
+so the earlier diagnostic returns the actual system drive. A running Agent
+must be restarted for any source change to take effect.

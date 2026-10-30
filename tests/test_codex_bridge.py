@@ -122,6 +122,50 @@ class WindowsAgentTests(unittest.TestCase):
         self.assertNotIn('CODEX_AGENT_TOKEN', env)
         self.assertNotIn('LKH_CODEX_AGENT_TOKEN', env)
 
+    def test_safe_env_normalizes_windows_uppercase_systemdrive(self):
+        # Windows os.environ typically normalizes its keys to uppercase.
+        with patch.object(self.agent.sys, "platform", "win32"):
+            with patch.dict(os.environ, {
+                'SYSTEMDRIVE': 'C:',
+                'SYSTEMROOT': r'C:\\Windows',
+                'LKH_CODEX_AGENT_TOKEN': 'private-token',
+            }, clear=True):
+                env = self.agent.safe_env()
+        self.assertEqual(env['SystemDrive'], 'C:')
+        self.assertEqual(len([k for k in env if k.upper() == 'SYSTEMDRIVE']), 1)
+        self.assertNotIn('LKH_CODEX_AGENT_TOKEN', env)
+
+    def test_safe_env_restores_missing_systemdrive_from_systemroot(self):
+        with patch.object(self.agent.sys, "platform", "win32"):
+            with patch.dict(os.environ, {
+                'SystemRoot': r'D:\\Windows',
+                'WINDIR': r'D:\\Windows',
+                'CODEX_AGENT_TOKEN': 'private-token',
+            }, clear=True):
+                env = self.agent.safe_env()
+        self.assertEqual(env['SystemDrive'], 'D:')
+        self.assertEqual(next(v for k, v in env.items() if k.upper() == 'SYSTEMROOT'), r'D:\\Windows')
+        self.assertNotIn('CODEX_AGENT_TOKEN', env)
+
+    def test_safe_env_uses_windir_if_systemroot_is_missing(self):
+        with patch.object(self.agent.sys, "platform", "win32"):
+            with patch.dict(os.environ, {'WINDIR': r'E:\\Windows'}, clear=True):
+                self.assertEqual(self.agent.safe_env()['SystemDrive'], 'E:')
+
+    def test_safe_env_rejects_missing_windows_roots(self):
+        with patch.object(self.agent.sys, "platform", "win32"):
+            with patch.dict(os.environ, {'SystemDrive': ''}, clear=True):
+                with self.assertRaisesRegex(RuntimeError, "SystemDrive unavailable"):
+                    self.agent.safe_env()
+
+    def test_safe_env_recovers_from_invalid_systemdrive(self):
+        with patch.object(self.agent.sys, "platform", "win32"):
+            with patch.dict(os.environ, {
+                'SystemDrive': r'Z:\\Windows',
+                'SystemRoot': r'D:\\Windows',
+            }, clear=True):
+                self.assertEqual(self.agent.safe_env()['SystemDrive'], 'D:')
+
     def test_safe_pull_rejects_sha_mismatch(self):
         git_results = iter(['', 'b'*40])
         with patch.object(self.agent, 'checked_repo'), patch.object(self.agent, 'git', side_effect=lambda *a, **kw: next(git_results)):
