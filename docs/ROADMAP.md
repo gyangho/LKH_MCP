@@ -20,7 +20,7 @@
 | Phase 0 Heartbeat·Agent 상태 | **IMPLEMENTED, E2E UNVERIFIED** | PR #2, CI PASS, 실제 Windows 큐 claim 관측. Verify 첫 실행 임시 worktree ACL 실패, 다음 실행 MXC SystemDrive 실패. PR #3/#4 수정은 CI 성공, 이후 실제 Verify PASS는 미확인 |
 | GitHub→Windows Codex 작업 큐 | **IMPLEMENTED** | 정확한 SHA/레포 allowlist/lease/fix 관리자 승인/Graphify snapshot. 실 Windows 전체 테스트 잔여 |
 | 기존 PyInstaller·Tray 시제품 | **IMPLEMENTED (prototype)** | `scripts/build-windows.ps1`, `src/server_launcher.py`·`src/tray.py` 존재. 서비스·독립 트레이·Installer 아님 |
-| I0–I7 | **I0 IN_PROGRESS / I1 IN_PROGRESS / I2–I7 NOT_STARTED** | I0 소스 기반 위험 분석, I1 loopback 전용 Native preview/CI 추가(Windows 실기 검증 미완료); Installer·SCM 서비스 미구현 |
+| I0–I7 | **I0–I7 IN_PROGRESS (staging code; Windows 실기·출시 미검증)** | I0 분석, I1 dual route, I2 SCM, I3 Task, I4 Pig, I5 DPAPI enrollment, I6 unsigned Inno staging, I7 SQLite backup 코드는 존재; 개별 Windows 서비스 설치·실기·보안 및 컷오버 미검증 |
 | Phase 1–9 | **NOT_STARTED** | 기초 관리 UI/telemetry 일부 존재하나 해당 단계 완료 기준 미달 |
 | Agent 자동 토큰 등록 | **NOT_STARTED** | 관리 UI 일회성 토큰 복사 PR #5는 요구 불일치로 PR #6 revert |
 
@@ -31,6 +31,10 @@
 - 현재 서버 단일 백엔드는 `/mcp`와 `/admin`을 함께 호스팅한다. Native preview를 비루프백에 노출하지 않으며, **동등한 포트·경로 격리를 구현하기 전 I1 완료/배포 판정 금지**.
 - PyInstaller에서 UI UX Pro Max 툴은 외부 Python 경로가 필요한 구조이므로 완전한 Native 기능 동등성은 아직 불합격.
 - Windows 실행환경에서의 설치/서비스/Oracle Thick/Cloudflare/WARP/트레이 상태 검증은 별도 미완료.
+
+## I0–I7 refac 실행 증빙
+
+[실제 구현·시험·출시 게이트 기록](TRACK_A_IMPLEMENTATION_STATUS.md) 참고. 현재는 Native 시제품과 unsigned installer를 빌드하는 단계로, I2–I7의 코드는 초기 구현이지만 환경 검증/서명/실제 컷오버가 필요하다. Live Naru, Cloudflare, Oracle, 생산 DB를 수정하지 않는다.
 
 ## A 트랙: Windows Native 기반 I0–I7
 

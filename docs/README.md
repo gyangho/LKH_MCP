@@ -20,3 +20,5 @@
 - 과거 장문 `README.md` → 링크 중심 진입점으로 교체.
 
 과거 원본은 Git 이력에서 찾을 수 있으며 현재 정본으로 취급하지 않는다.
+
+- [TRACK_A_IMPLEMENTATION_STATUS](TRACK_A_IMPLEMENTATION_STATUS.md) — I0~I7 코드 구현·CI·운영 게이트 기록.

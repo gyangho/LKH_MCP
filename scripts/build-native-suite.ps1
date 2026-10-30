@@ -24,7 +24,10 @@ try {
     & $Python -m PyInstaller @base --console --name LKH-MCP-Enroll `
         --hidden-import win32crypt scripts/native-enroll.py
     if ($LASTEXITCODE -ne 0) { throw "Enrollment build failed" }
-    foreach ($name in @("LKH-MCP-Server", "LKH-MCP-Service", "LKH-MCP-Tray",
+    & $Python -m PyInstaller @base --console --name LKH-MCP-Admin-Setup `
+        scripts/native-admin-setup.py
+    if ($LASTEXITCODE -ne 0) { throw "Admin bootstrap build failed" }
+    foreach ($name in @("LKH-MCP-Admin-Setup", "LKH-MCP-Server", "LKH-MCP-Service", "LKH-MCP-Tray",
                          "LKH-Codex-Agent", "LKH-MCP-Enroll")) {
         if (-not (Test-Path "dist\$name\$name.exe")) {
             throw "Missing unsigned bundle: $name"

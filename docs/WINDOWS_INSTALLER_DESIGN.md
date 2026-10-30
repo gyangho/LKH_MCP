@@ -74,3 +74,14 @@ Default bind is `127.0.0.1:18080` and **live 8000/8001 ports are rejected in pre
 The check command validates packaged React `web/dist/index.html` and vendor UI/UX script, **not** actual authentication/Oracle/Cloudflare or Windows service startup. Existing `src/uiux_tools.py` requires an externally installed Python interpreter via `UIUX_PYTHON_EXECUTABLE` when frozen; parity remains blocked until a future audited solution. Oracle 11g needs compatible local Instant Client/Thick mode and real tests. Keep Docker gateway running.
 
 Windows CI builds this unsigned preview and smoke-tests asset inclusion/loopback HTTP. **Do not distribute this as an approved Installer**; I1 completion still needs cross-port ACL/HTTP route isolation and Oracle/UIUX parity verification.
+
+## I2–I7 staged components (refac, Windows 실운영 미검증)
+
+- 서비스 `src/native_service.py` → 독립 `LKH-MCP-Server.exe` 실행·종료·오류 감지, SCM 서비스 `LKH-MCP-Server` 준비. 로그인된 트레이 세션과 분리.
+- Agent Task `LKH-Codex-Agent` → `scripts/install-agent-task.ps1`로 사용자 로그인 계정 등록, 서비스의 허용 작업 제어만 수행.
+- Pig Tray `src/native_tray.py` → 승인된 `branding/pig-terminal.png`의 픽셀 구조 보존, 초록/핑크/회색 배색만 파생. 서버·Agent와 별도 EXE.
+- 자동 인증 → Installer 장치용 DPAPI 암호화 키, 서버 SQLite SHA 검증, 15분 scoped bearer, Windows Agent 자동 수령·주기적 갱신. **비내보내기 CNG 키/challenge-response와 실제 서비스 계정 ACL E2E는 향후 보안 게이트**.
+- Installer `installer/LKH-MCP.iss` + `scripts/build-native-suite.ps1`: 명시적 UAC, 서비스/스케줄러/트레이 등록, 관리자 초기 비밀번호는 별도 숨김 콘솔 입력으로 salted hash만 생성. **현재 unsigned preview**, 제품 서명·업그레이드 실패 롤백 검증 없음.
+- I7 `src/native_migration.py`: 기존 SQLite를 읽기 전용으로 열어 새로운 staging DB에 Backup API 복사, integrity/테이블 건수 비교, 기존 파일 덮어쓰기 거부. Docker 원본 DB 수출과 라우팅 전환은 수행하지 않음.
+
+현재 모든 설치·제거 명령은 실제 Windows 서비스/파일/ACL을 변경한다. **CI의 Installer compile과 실제 설치는 다르며, 사용자 승인 없이 운영 PC에 설치하지 않는다.**

@@ -28,4 +28,15 @@ $account = New-Object System.Security.Principal.NTAccount($AgentUser)
 $sid = $account.Translate([System.Security.Principal.SecurityIdentifier]).Value
 & icacls.exe $credential /grant:r "*${sid}:(R)" | Out-Null
 if ($LASTEXITCODE -ne 0) { throw "Device credential ACL grant failed" }
+if (Test-Path -LiteralPath $config) {
+    & icacls.exe $config /grant:r "*${sid}:(R)" | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "Agent configuration ACL grant failed" }
+}
+# Grant local Service account READ/EXECUTE on this exact task only.
+# Never give it task modification or arbitrary command execution rights.
+$com = New-Object -ComObject "Schedule.Service"
+$com.Connect()
+$registered = $com.GetFolder("\").GetTask("LKH-Codex-Agent")
+$descriptor = $registered.GetSecurityDescriptor(15)
+$registered.SetSecurityDescriptor($descriptor + "(A;;GRGX;;;LS)", 0)
 Write-Host "Task registered for $AgentUser. Agent account must be logged in and authorized."
