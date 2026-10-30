@@ -1,0 +1,15 @@
+{
+  "server_url": "http://127.0.0.1:8001",
+  "agent_id": "win-dev-01",
+  "poll_interval_seconds": 10,
+  "projects": {
+    "LKH_MCP": {
+      "repository": "gyangho/LKH_MCP",
+      "path": "C:/Users/User/Desktop/이경호/개발/LKH_MCP"
+    },
+    "ITAM": {
+      "repository": "gyangho/ITAM",
+      "path": "C:/Users/User/Desktop/이경호/개발/ITAM"
+    }
+  }
+}
