@@ -1,0 +1,60 @@
+name: Windows native server preview (I1)
+on:
+  push:
+    branches: [refac]
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - 'scripts/build-native-server.ps1'
+      - 'scripts/generate_icon.py'
+      - 'scripts/windows-version.txt'
+      - 'frontend/**'
+      - 'branding/**'
+      - 'requirements*.txt'
+      - '.github/workflows/windows-native.yaml'
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - 'scripts/build-native-server.ps1'
+      - 'scripts/generate_icon.py'
+      - 'scripts/windows-version.txt'
+      - 'frontend/**'
+      - 'branding/**'
+      - 'requirements*.txt'
+      - '.github/workflows/windows-native.yaml'
+
+permissions:
+  contents: read
+
+jobs:
+  preview:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: I1 native configuration unit tests
+        shell: pwsh
+        run: |
+          $env:PYTHONPATH = "src"
+          python -m pip install -r requirements.txt
+          python -m unittest discover -s tests -t . -p test_native_runtime.py -v
+      - name: Build unsigned native preview and check bundled assets
+        shell: pwsh
+        run: |
+          $python = python -c "import sys; print(sys.executable)"
+          ./scripts/build-native-server.ps1 -Python $python
+      - name: Upload unsigned preview bundle for inspection only
+        uses: actions/upload-artifact@v4
+        with:
+          name: lkh-mcp-native-preview-unsigned
+          path: dist/LKH-MCP-Server/
+          if-no-files-found: error
+          retention-days: 7
