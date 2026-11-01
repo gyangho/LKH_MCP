@@ -58,6 +58,8 @@ class RetryTests(IsolatedDatabase):
         self.allow.start(); self.addCleanup(self.allow.stop)
         self.enabled = patch.object(bridge, "_enabled")
         self.enabled.start(); self.addCleanup(self.enabled.stop)
+        quota = patch.object(bridge.settings_store, "get", return_value=20)
+        quota.start(); self.addCleanup(quota.stop)
         db = bridge._connect()
         db.execute("""INSERT INTO codex_agent_jobs
              (id,project,repository,branch,expected_sha,kind,instructions,state,actor,created_at)
