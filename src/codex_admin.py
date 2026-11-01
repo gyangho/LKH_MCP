@@ -66,9 +66,13 @@ def register_codex_admin_routes(mcp):
             data = json.loads(body)
             if not isinstance(data, dict) or set(data) != {'task_id', 'action'}:
                 raise ValueError('Unexpected fields')
-            if data['action'] not in ('approve', 'reject', 'cancel'):
+            if data['action'] not in ('approve', 'reject', 'cancel', 'retry'):
                 raise ValueError('Unexpected action')
-            result = decide(data['task_id'], data['action'], actor)
+            if data['action'] == 'retry':
+                from codex_recovery import retry_failed
+                result = retry_failed(data['task_id'], actor)
+            else:
+                result = decide(data['task_id'], data['action'], actor)
             return _private(JSONResponse(result))
         except (AdminNotConfigured, AdminUnauthorized) as exc:
             return _private(_auth_response(exc, request))

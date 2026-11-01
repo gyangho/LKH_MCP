@@ -13,17 +13,22 @@ def register_instruction_tools(mcp):
     @mcp.tool()
     def instructions_list() -> dict:
         """List published instruction scopes and versions (never drafts)."""
-        return store.list_entries(published_only=True)
+        return {"instructions": [e for e in store.list_entries(published_only=True)["instructions"] if e["scope"] == "global"]}
 
     @mcp.tool()
     def instructions_get(instruction_id: str) -> dict:
         """Read a published instruction by ID."""
-        return store.get_entry(instruction_id, published_only=True)
+        item = store.get_entry(instruction_id, published_only=True)
+        if item["scope"] != "global":
+            raise PermissionError("Authenticated scope context required")
+        return item
 
     @mcp.tool()
     def instructions_resolve(name: str, project: str = "", agent: str = "", tool: str = "") -> dict:
         """Resolve published instruction with tool > agent > project > global precedence."""
-        return store.resolve(name, project=project, agent=agent, tool=tool)
+        if project or agent or tool:
+            raise PermissionError("Unverified instruction selectors are forbidden")
+        return store.resolve(name)
 
 
 def register_instruction_admin(mcp):
