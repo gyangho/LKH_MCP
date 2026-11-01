@@ -46,7 +46,8 @@ jobs:
         shell: pwsh
         run: |
           foreach ($name in @("build-native-server.ps1", "build-native-suite.ps1",
-                              "install-agent-task.ps1", "native-installer-preflight.ps1")) {
+                              "install-agent-task.ps1", "native-installer-preflight.ps1",
+                              "native-upgrade-preflight.ps1")) {
             $tokens = $null
             $errors = $null
             $path = (Resolve-Path "scripts/$name").Path

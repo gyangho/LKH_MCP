@@ -550,7 +550,7 @@ function Codex({
           ? "Windows 로컬 Codex 수정 제안 실행"
           : action === "reject"
             ? "작업 거부"
-            : "작업 취소") + "을 승인할까요?",
+            : action === "retry" ? "실패한 읽기 전용 작업 재등록" : "작업 취소") + "을 승인할까요?",
       )
     )
       return;
@@ -673,6 +673,11 @@ function Codex({
                       거부
                     </Button>
                   </>
+                )}
+                {t.state === "failed" && t.kind !== "fix" && (
+                  <Button disabled={saving === t.id} onClick={() => decide(t.id, "retry")}>
+                    실패한 작업 재시도
+                  </Button>
                 )}
                 {t.state === "queued" && (
                   <Button
