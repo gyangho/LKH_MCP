@@ -82,6 +82,11 @@ def record_failure() -> None:
         now = time.time()
         _prune(now)
         _FAILED.append(now)
+    try:
+        from operations_store import record
+        record("auth", "login", "error")
+    except (OSError, RuntimeError, ValueError, __import__("sqlite3").Error):
+        pass
 
 def issue_session(response: JSONResponse) -> None:
     username, _, _, _ = _configured()
@@ -93,6 +98,11 @@ def issue_session(response: JSONResponse) -> None:
         if len(_SESSIONS) >= 16:
             _SESSIONS.pop(min(_SESSIONS, key=lambda x: _SESSIONS[x][1]))
         _SESSIONS[hashlib.sha256(token.encode()).hexdigest()] = (username, now + DURATION)
+    try:
+        from operations_store import record
+        record("auth", "login", "success")
+    except (OSError, RuntimeError, ValueError, __import__("sqlite3").Error):
+        pass
     response.set_cookie(COOKIE, token, max_age=DURATION, path="/admin",
                         httponly=True, samesite="strict", secure=_origin().startswith("https"))
 
@@ -109,6 +119,11 @@ def verify_admin_session(request: Request) -> str:
         return entry[0]
 
 def revoke_session(request: Request) -> None:
+    try:
+        from operations_store import record
+        record("auth", "logout", "success")
+    except (OSError, RuntimeError, ValueError, __import__("sqlite3").Error):
+        pass
     token = request.cookies.get(COOKIE, "")
     if token and len(token) <= 128:
         with _LOCK:

@@ -126,6 +126,7 @@ def publish(ident: str, revision: int, actor: str) -> dict:
             row = _entry(db, ident)
             if row[4] != revision:
                 raise ValueError("Stale instruction revision")
+            _optional_peer_approval(db, ident, revision)
             db.execute("UPDATE instruction_entries SET published_revision=? WHERE id=?",
                        (revision, ident))
             _audit(db, ident, actor, "publish", revision)
@@ -155,6 +156,34 @@ def rollback(ident: str, target_revision: int, current_revision: int, actor: str
         db.close()
     return {"id": ident, "revision": current_revision,
             "published_revision": target_revision, "status": "published"}
+
+
+def revoke(ident: str, current_revision: int, actor: str) -> dict:
+    """Unpublish without destroying immutable history."""
+    _check_actor(actor)
+    if type(current_revision) is not int or current_revision < 1:
+        raise ValueError("Invalid revision")
+    db = _db()
+    try:
+        with db:
+            row = _entry(db, ident)
+            if row[4] != current_revision or row[5] is None:
+                raise ValueError("Stale revision or instruction not published")
+            db.execute("UPDATE instruction_entries SET published_revision=NULL WHERE id=?", (ident,))
+            _audit(db, ident, actor, "revoke", current_revision)
+    finally:
+        db.close()
+    return {"id": ident, "revision": current_revision, "status": "revoked"}
+
+
+def _optional_peer_approval(db, ident: str, revision: int) -> None:
+    """Opt-in only: single-admin deployment cannot meet two-person approval."""
+    import os
+    if os.environ.get("LKH_REQUIRE_PEER_REVIEW") != "1":
+        return
+    from instruction_approvals import is_approved
+    if not is_approved(ident, revision, db=db):
+        raise PermissionError("Independent review required")
 
 
 def list_entries(published_only: bool = True, limit: int = 100) -> dict:
