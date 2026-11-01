@@ -40,3 +40,9 @@ PR #5의 관리자 발급→Windows 로컬 token.json 수동 붙여넣기 방식
 | Codex sandbox/파일 | MXC 호환성, 임시 worktree ACL cleanup 별도 보고, 원본 checkout 무변경 |
 
 로그: actor/agent/action/time/status만 기록, token/password/private key/full Codex outputs 저장하지 않음. 보안·운영 변경(자격증명 교체, 서비스 중단, 방화벽/DB)은 별도 승인.
+
+## I5 provisional implementation caveat
+
+`src/native_enrollment.py`는 Windows LOCAL_MACHINE DPAPI로 보호한 1회 설치 장치 secret을 운영 계정 ACL로 제한하고, SQLite에 SHA-256 verifier 및 session token hashes만 저장한다. `/admin/agent/enrollment/session`은 Native private loopback Admin surface만 허용하고 Windows Agent는 수동 토큰 파일 교체 없이 token을 갱신한다. 최초 장치 자격증명은 Installer가 관리자 권한으로 자동 구성한다.
+
+이는 **기존 설계의 CNG non-exportable device key + challenge nonce 프로토콜과 완전히 동일하지 않다**. 인증된 같은 PC/loopback에만 허용하는 첫 구현이며, 장치 키 회전 중 파일/DB 원자성·서비스/사용자 권한·재생 공격 방어에 대한 추가 보안 리뷰가 필요하다. 다른 PC/Cloudflare 경로로 native enrollment endpoint를 노출하지 않는다.

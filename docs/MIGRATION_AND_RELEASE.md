@@ -38,3 +38,9 @@ Naru `mcp-data` 볼륨/SQLite WAL, `secrets/bootstrap.json`, 관리자 계정, O
 - [ ] RELEASED 판정 근거·로그·감사 기록 및 Docker 폐기 별도 승인
 
 구버전 SQLite 설정 행·감사 기록의 정리는 백업 후 별도 마이그레이션에서만 수행하고, 현재 기능 정리 과정에서 원본 운영 데이터와 볼륨을 직접 지우지 않는다.
+
+## I7 code available, cutover not authorized
+
+`src/native_migration.py` has `--source` read-only integrity and `--copy --destination` staging snapshot with SQLite Backup API, row-count comparison and no overwrite of an existing destination. It does not export remote Docker volumes by itself. Use a separately authorized, consistent SQLite export and a secure staging directory, not a live production path.
+
+Actual DB export, Cloudflare/Docker port switch, Windows native installation, acceptance test and final rollback observation **remain pending separate operational authorization**. Code/CI success cannot mark I7 VERIFIED or RELEASED.

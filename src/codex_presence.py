@@ -67,7 +67,11 @@ def heartbeat(agent_id: str, projects: list[str], capabilities: dict) -> dict:
 def agents_snapshot() -> dict:
     """Administrator-only caller exposes bounded, non-secret connection metadata."""
     enabled = bool(bridge.settings_store.get("CODEX_AGENT_ENABLED"))
-    configured = len(os.getenv("CODEX_AGENT_TOKEN", "")) >= 32
+    if os.getenv("LKH_NATIVE_MODE") == "1":
+        from native_enrollment import enrolled
+        configured = enrolled()
+    else:
+        configured = len(os.getenv("CODEX_AGENT_TOKEN", "")) >= 32
     now = bridge._now()
     conn = bridge._connect()
     conn.row_factory = __import__("sqlite3").Row
