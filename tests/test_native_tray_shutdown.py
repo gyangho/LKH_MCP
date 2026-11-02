@@ -78,7 +78,7 @@ class TrayShutdownTests(unittest.TestCase):
         with patch("ctypes.windll", create=True) as win:
             win.user32.MessageBoxW.return_value = 7  # No
             self.assertFalse(tray._confirm_shutdown("server"))
-            self.assertIn("\\n", win.user32.MessageBoxW.call_args.args[1])
+            self.assertIn("\n", win.user32.MessageBoxW.call_args.args[1])
             self.assertEqual(win.user32.MessageBoxW.call_args.args[3] & 0x100, 0x100)
 
     def test_frozen_service_path_is_fixed_to_adjacent_package(self):
