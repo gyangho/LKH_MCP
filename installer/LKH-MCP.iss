@@ -172,9 +172,9 @@ begin
         RemovalMode := 'program'
       else begin
         RemovalMode := 'all';
-        if MsgBox('전체 삭제: ProgramData의 LKH-MCP 설정/SQLite/로그/백업이 삭제됩니다.' +
-          #13#10 + 'SQLite는 별도 ACL 보호 폴더에 먼저 검증 백업하고 그 백업은 보존합니다.' +
-          #13#10 + '계속하시겠습니까?',
+        if MsgBox('전체 삭제: ProgramData의 LKH-MCP 설정/SQLite/로그/백업이 삭제됩니다.' + #13#10 +
+          'SQLite는 별도 ACL 보호 폴더에 먼저 검증 백업하고 그 백업은 보존합니다.' + #13#10 +
+          '계속하시겠습니까?',
           mbCriticalError, MB_YESNO or MB_DEFBUTTON2) <> idYes then begin
           Result := False; Exit;
         end;
