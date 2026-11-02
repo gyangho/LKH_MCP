@@ -18,9 +18,10 @@ class GuardTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 validate_table_reference(bad)
         with patch.dict(os.environ, {"ORACLE_ALLOWED_TABLES": "safe, ITAM.Asset_1"}):
-            self.assertEqual(get_allowed_tables(), {"SAFE", "ITAM.ASSET_1"})
-            with self.assertRaises(PermissionError):
-                preview_table("UNLISTED")  # denied BEFORE any connection is made
+            self.assertEqual(get_allowed_tables("safe, ITAM.Asset_1"), {"SAFE", "ITAM.ASSET_1"})
+            with patch("oracle_db._profile", return_value={"allowed_tables": "SAFE"}):
+                with self.assertRaises(PermissionError):
+                    preview_table("connection-id", "UNLISTED")  # denied BEFORE opening Oracle
 
 
 if __name__ == "__main__":

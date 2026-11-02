@@ -81,3 +81,9 @@ h2 {color:var(--pig-cream)}
   .setting-input {width:100%;flex:1 1 auto}
   .topbar .actions {width:100%}
 }
+
+.settings-form { display: grid; gap: 16px; border: 0; padding: 0; min-width: 0; }
+.settings-form > label, .settings-form details label { display: grid; gap: 6px; }
+.settings-form .choice { display: flex; align-items: center; }
+.settings-form input { max-width: 100%; }
+.settings-form summary { cursor: pointer; padding-block: 8px; }

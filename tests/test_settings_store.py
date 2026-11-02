@@ -33,12 +33,10 @@ class TestSettingsStore(unittest.TestCase):
         settings_store.initialize()
         self.assertTrue(settings_store.get("CODEX_AGENT_ENABLED"))
 
-    def test_repository_allowlist_validation(self):
-        good = "ITAM=gyangho/ITAM; LKH_MCP=gyangho/LKH_MCP"
-        self.assertEqual(settings_store._validate("GIT_ALLOWED_REPOS", good), good)
-        for bad in ("ITAM=gyangho/ITAM;ITAM=gyangho/ITAM", "ITAM=gyangho/ITAM;", "ITAM= "):
-            with self.subTest(bad=bad), self.assertRaises(ValueError):
-                settings_store._validate("GIT_ALLOWED_REPOS", bad)
+    def test_raw_repository_setting_is_no_longer_editable(self):
+        self.assertNotIn("GIT_ALLOWED_REPOS", {x["key"] for x in settings_store.items()})
+        with self.assertRaises(ValueError):
+            settings_store.update("GIT_ALLOWED_REPOS", "PROJECT=owner/repo", "admin", 1)
 
     def test_legacy_keys_not_exposed_or_writable(self):
         retired = ("GIT_ALLOW_PUSH", "GIT_ALLOW_COMMIT", "GIT_EXECUTABLE",

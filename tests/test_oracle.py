@@ -2,7 +2,10 @@
 from oracle_db import test_select
 
 if __name__ == "__main__":
-    result = test_select()
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("connection_id")
+    result = test_select(parser.parse_args().connection_id)
     print(result)
     if result.get("status") != "MCP_OK":
         raise SystemExit("Oracle SELECT check failed")

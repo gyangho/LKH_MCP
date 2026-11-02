@@ -157,7 +157,6 @@ def register_configuration_routes(mcp: Any) -> None:
             actor = _verify_access(request)
             return _private(JSONResponse({"viewer": actor, "settings": settings_store.items(),
                                           "audit": settings_store.audit_events(20), "secrets_configured": {
-                                              "oracle": bool(os.environ.get("ORACLE_PASSWORD")),
                                               "local_admin": bool(os.getenv("ADMIN_PASSWORD_HASH"))
                                           }}))
         except (AdminNotConfigured, AdminUnauthorized) as exc:

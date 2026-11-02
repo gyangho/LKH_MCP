@@ -34,21 +34,9 @@ def _now() -> int:
     return int(time.time())
 
 
-def _allowed() -> dict[str, str]:
-    raw = settings_store.get("GIT_ALLOWED_REPOS")
-    mapping = {}
-    if not raw:
-        return mapping
-    for part in raw.split(";"):
-        if "=" not in part:
-            raise ValueError("GIT_ALLOWED_REPOS must be PROJECT=owner/repo;...")
-        name, repo = (v.strip() for v in part.split("=", 1))
-        if not _NAME.fullmatch(name) or not _REPO.fullmatch(repo) or name in mapping:
-            raise ValueError("Invalid Git repository allowlist")
-        mapping[name] = repo
-    if len(mapping) > 10:
-        raise ValueError("Maximum 10 repositories")
-    return mapping
+def _allowed(db=None) -> dict[str, str]:
+    from repository_store import mapping
+    return mapping(db)
 
 
 def _enabled() -> None:
@@ -87,7 +75,7 @@ def enqueue(project: str, branch: str, expected_sha: str, kind: str = "verify",
     _enabled()
     allowed = _allowed()
     if not isinstance(project, str) or project not in allowed:
-        raise ValueError("Project not in GIT_ALLOWED_REPOS")
+        raise ValueError("Project is not approved")
     if not isinstance(branch, str) or not _BRANCH.fullmatch(branch) or branch.endswith(("/", ".")):
         raise ValueError("Invalid branch")
     if not isinstance(expected_sha, str) or not _SHA.fullmatch(expected_sha):
@@ -106,6 +94,8 @@ def enqueue(project: str, branch: str, expected_sha: str, kind: str = "verify",
     conn = _connect()
     try:
         conn.execute("BEGIN IMMEDIATE")
+        if _allowed(conn).get(project) != allowed[project]:
+            raise PermissionError("Repository approval changed")
         if conn.execute("SELECT COUNT(*) FROM codex_agent_jobs WHERE state IN ('queued','pending_approval','running')").fetchone()[0] >= 100:
             raise RuntimeError("Job queue full")
         conn.execute("""INSERT INTO codex_agent_jobs
@@ -197,13 +187,18 @@ def claim(agent_id: str, projects: list[str]) -> dict:
     if not isinstance(projects, list) or not projects or len(projects) > 10 or any(
             not isinstance(p, str) or not _NAME.fullmatch(p) for p in projects):
         raise ValueError("Invalid project aliases")
-    projects = sorted(set(projects).intersection(_allowed()))
+    projects = sorted(set(projects))
     if not projects:
         return {"job": None}
     conn = _connect()
     conn.row_factory = sqlite3.Row
     try:
         conn.execute("BEGIN IMMEDIATE")
+        approved = _allowed(conn)
+        projects = sorted(set(projects).intersection(approved))
+        if not projects:
+            conn.execute("COMMIT")
+            return {"job": None}
         now = _now()
         # Do not silently requeue a job after an agent crash. Pull/fix may have run.
         conn.execute("""UPDATE codex_agent_jobs SET state='failed',finished_at=?,error='Agent lease timed out; inspect local state before retry'
@@ -219,6 +214,10 @@ def claim(agent_id: str, projects: list[str]) -> dict:
         placeholders = ",".join("?" for _ in projects)
         row = conn.execute(f"SELECT * FROM codex_agent_jobs WHERE state='queued' AND project IN ({placeholders}) ORDER BY created_at,id LIMIT 1", projects).fetchone()
         if row is None:
+            conn.execute("COMMIT")
+            return {"job": None}
+        if approved.get(row["project"]) != row["repository"]:
+            conn.execute("UPDATE codex_agent_jobs SET state='cancelled',finished_at=?,error='Repository approval changed' WHERE id=?", (now, row["id"]))
             conn.execute("COMMIT")
             return {"job": None}
         lease = secrets.token_urlsafe(32)
@@ -297,11 +296,12 @@ def complete(task_id: str, lease: str, agent_id: str, success: bool,
 
 
 def graph_list() -> dict:
+    allowed = _allowed()
     conn = _connect()
     try:
         return {"projects": [{"project": p, "repository": r, "commit_sha": s, "published_at": at,
                               "nodes": n, "edges": e}
-                             for p, r, s, at, n, e in conn.execute("SELECT project,repository,commit_sha,published_at,nodes,edges FROM codex_graphs ORDER BY project")]}
+                             for p, r, s, at, n, e in conn.execute("SELECT project,repository,commit_sha,published_at,nodes,edges FROM codex_graphs ORDER BY project") if allowed.get(p) == r]}
     finally:
         conn.close()
 

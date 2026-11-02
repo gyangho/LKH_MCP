@@ -22,7 +22,7 @@ try {
         if ($LASTEXITCODE -ne 0) { throw "npm run build failed" }
     } finally { Pop-Location }
     if (-not (Test-Path "frontend\dist\index.html")) { throw "Missing frontend/dist/index.html" }
-    & $Python -m pip install -r requirements.txt -r requirements-build.txt -r requirements-native-build.txt
+    & $Python -m pip install -r requirements/runtime.txt -r requirements/build.txt -r requirements/windows.txt
     if ($LASTEXITCODE -ne 0) { throw "Dependency installation failed" }
     & $Python scripts/generate_icon.py
     if ($LASTEXITCODE -ne 0) { throw "Approved Pixel Pig icon generation failed" }

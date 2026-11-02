@@ -18,7 +18,7 @@ Scope: repository `gyangho/LKH_MCP`. Work on `refac` unless the user explicitly 
 
 ## Preflight
 
-1. Read the most recent commit, active branch, `docs/ROADMAP.md` and `docs/TRACK_A_IMPLEMENTATION_STATUS.md`.
+1. Read the most recent commit, active branch, `docs/ROADMAP.md` and `docs/VERIFICATION.md`.
 2. Inspect affected files rather than inferring from outdated documents.
 3. Record whether the task is CI-verifiable, Windows-VM-verifiable, or requires separate production cutover authorization.
 4. Protect concurrent changes; do not reset branch history or rewrite unreviewed files.
@@ -54,4 +54,4 @@ Windows GitHub Actions should additionally check Native PyInstaller packaging, H
 - SQLite WAL-consistent backup/restore, data-level comparisons, fallback to Naru.
 - Explicit maintenance approval before Cloudflare/Docker cutover; `main` merge is separately authorized.
 
-Update `docs/ROADMAP.md`, `docs/PHASES_1_9_STATUS.md`, and test evidence when status changes. If blocked, report actual blockers instead of assuming success.
+Update `docs/ROADMAP.md`, `docs/VERIFICATION.md`, and test evidence when status changes. If blocked, report actual blockers instead of assuming success.

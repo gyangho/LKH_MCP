@@ -27,9 +27,9 @@ class PresenceTests(unittest.TestCase):
         self.db = Path(temp.name) / "presence.sqlite3"
         self.clock = [1_000_000]
         self.settings = {"CODEX_AGENT_ENABLED": True,
-                         "GIT_ALLOWED_REPOS": "LKH_MCP=gyangho/LKH_MCP",
                          "CODEX_MAX_RUNS_PER_DAY": 30}
         for patcher in [
+            patch.object(bridge, "_allowed", return_value={"LKH_MCP": "gyangho/LKH_MCP"}),
             patch.object(bridge.settings_store, "get", side_effect=lambda k: self.settings[k]),
             patch.object(bridge.settings_store, "_connect",
                          side_effect=lambda: sqlite3.connect(self.db)),

@@ -7,7 +7,7 @@ Push-Location $root
 try {
     & .\scripts\build-native-server.ps1 -Python $Python
     if ($LASTEXITCODE -ne 0) { throw "Server build failed" }
-    & $Python -m pip install -r requirements-native-build.txt
+    & $Python -m pip install -r requirements/windows.txt
     if ($LASTEXITCODE -ne 0) { throw "Native Windows dependencies unavailable" }
     $base = @("--noconfirm", "--clean", "--onedir", "--paths", "src",
               "--hidden-import", "win32timezone")

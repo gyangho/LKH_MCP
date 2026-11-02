@@ -26,7 +26,7 @@ def retry_failed(task_id: str, actor: str) -> dict:
             FROM codex_agent_jobs WHERE id=?""", (task_id,)).fetchone()
         if old is None or old[6] != "failed" or old[4] not in ("verify", "diagnose", "graphify"):
             raise ValueError("Only failed non-fix tasks can be retried")
-        if bridge._allowed().get(old[0]) != old[1]:
+        if bridge._allowed(db).get(old[0]) != old[1]:
             raise PermissionError("Repository no longer allowlisted")
         prior = db.execute("SELECT retry_id FROM codex_job_retries WHERE source_id=?",
                            (task_id,)).fetchone()

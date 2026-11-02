@@ -1,26 +1,11 @@
-# 공식 문서 인덱스
+# 문서 인덱스
 
-기준: 2026-10-30. 계획/구현/운영 상태를 혼용하지 않는다.
+| 문서 | 범위 |
+|---|---|
+| [기능 명세](FEATURES.md) | 구현된 기능, 보안 경계, 현재 제약 |
+| [아키텍처](ARCHITECTURE.md) | Native 프로세스·포트·데이터 |
+| [빌드 및 설정](BUILD_AND_CONFIGURATION.md) | 빌드, 설정 우선순위, 설치, 운영·백업·전환/롤백 절차 |
+| [로드맵](ROADMAP.md) | 남은 작업 및 출시 조건 |
+| [CI 및 검증](VERIFICATION.md) | 테스트 명령, 과거 증거, 미검증 항목과 출시 게이트 |
 
-1. [DOCUMENTATION_POLICY](DOCUMENTATION_POLICY.md) — 관리·삭제 정책, 상태·증거 규칙
-2. [ROADMAP](ROADMAP.md) — 구현 순서, I0–I7 및 Phase 0–9, 완료 기준
-3. [TRACK_A_I0_BASELINE](TRACK_A_I0_BASELINE.md) — I0 현행 소스 인벤토리, 위험·실환경 확인 필요 항목
-4. [ARCHITECTURE](ARCHITECTURE.md) — AS-IS Docker/Agent, TO-BE Windows Native
-5. [WINDOWS_INSTALLER_DESIGN](WINDOWS_INSTALLER_DESIGN.md) — 설치·서비스·Task Scheduler·트레이 상세 설계
-6. [SECURITY_AND_ENROLLMENT](SECURITY_AND_ENROLLMENT.md) — 인증, 최초 등록, 자동 토큰 갱신
-7. [OPERATIONS](OPERATIONS.md) — 현행 Docker+Naru+Windows Agent 실제 운영
-8. [MIGRATION_AND_RELEASE](MIGRATION_AND_RELEASE.md) — 보존·검증·롤백
-9. [DECISIONS](DECISIONS.md) — ADR 및 폐기 이력
-
-`frontend/README.md`는 UI 개발 전용, `frontend/NANUMSQUARE-LICENSE.md`는 제3자 라이선스 고지이며 제거 대상이 아니다.
-
-폐기된 중복 문서:
-- `docs/DOCKER_SQLITE_CODEX.md` → `OPERATIONS` + `ARCHITECTURE` + `SECURITY_AND_ENROLLMENT`로 통합.
-- `docs/WINDOWS_CODEX_AGENT.md` → `OPERATIONS` + `ROADMAP` + `SECURITY_AND_ENROLLMENT`로 통합.
-- 과거 장문 `README.md` → 링크 중심 진입점으로 교체.
-
-과거 원본은 Git 이력에서 찾을 수 있으며 현재 정본으로 취급하지 않는다.
-
-- [TRACK_A_IMPLEMENTATION_STATUS](TRACK_A_IMPLEMENTATION_STATUS.md) — I0~I7 코드 구현·CI·운영 게이트 기록.
-
-- [PHASES_1_9_STATUS](PHASES_1_9_STATUS.md) — Phase 1–9 코드·테스트·운영 미검증 상태 기록.
+저장소 진입점은 [README](../README.md). `frontend/README.md`는 프런트엔드 개발용이며 글꼴 라이선스 고지를 유지한다. 과거 문서는 Git 이력에서 확인할 수 있다.

@@ -1,0 +1,899 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "LKH MCP Oracle connections and repository approvals",
+    "version": "1.0.0",
+    "description": "Private administrator session required. Writes and connection tests require exact Origin/Host, JSON and X-LKH-Admin-Action: 1. Never returns passwords. Common Oracle Client mode/path is configured separately and requires restart. Repository approval changes cancel queued jobs; running jobs block changes. Agent local configuration is separate."
+  },
+  "servers": [
+    {
+      "url": "http://127.0.0.1:8001"
+    }
+  ],
+  "security": [
+    {
+      "adminSession": []
+    }
+  ],
+  "paths": {
+    "/admin/api/oracle/connections": {
+      "get": {
+        "summary": "List administrator-visible profiles without passwords",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "connections": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Connection"
+                      }
+                    }
+                  },
+                  "required": [
+                    "connections"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid fields or input format"
+          },
+          "401": {
+            "description": "Session required"
+          },
+          "403": {
+            "description": "Origin/Host/CSRF denied"
+          },
+          "404": {
+            "description": "Unknown connection"
+          },
+          "409": {
+            "description": "Stale revision"
+          },
+          "413": {
+            "description": "Body must be 1–12000 bytes"
+          },
+          "503": {
+            "description": "Oracle, DPAPI or storage unavailable; details are redacted"
+          }
+        }
+      },
+      "post": {
+        "summary": "Create a connection (maximum 20)",
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Connection"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid fields or input format"
+          },
+          "401": {
+            "description": "Session required"
+          },
+          "403": {
+            "description": "Origin/Host/CSRF denied"
+          },
+          "404": {
+            "description": "Unknown connection"
+          },
+          "409": {
+            "description": "Stale revision"
+          },
+          "413": {
+            "description": "Body must be 1–12000 bytes"
+          },
+          "503": {
+            "description": "Oracle, DPAPI or storage unavailable; details are redacted"
+          }
+        },
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-LKH-Admin-Action",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Create"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/api/oracle/connections/{ident}": {
+      "parameters": [
+        {
+          "in": "path",
+          "name": "ident",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "put": {
+        "summary": "Replace profile using expected revision; blank password preserves it",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Connection"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid fields or input format"
+          },
+          "401": {
+            "description": "Session required"
+          },
+          "403": {
+            "description": "Origin/Host/CSRF denied"
+          },
+          "404": {
+            "description": "Unknown connection"
+          },
+          "409": {
+            "description": "Stale revision"
+          },
+          "413": {
+            "description": "Body must be 1–12000 bytes"
+          },
+          "503": {
+            "description": "Oracle, DPAPI or storage unavailable; details are redacted"
+          }
+        },
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-LKH-Admin-Action",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Update"
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete saved connection only; running queries may finish; Oracle data is unchanged",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "deleted": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid fields or input format"
+          },
+          "401": {
+            "description": "Session required"
+          },
+          "403": {
+            "description": "Origin/Host/CSRF denied"
+          },
+          "404": {
+            "description": "Unknown connection"
+          },
+          "409": {
+            "description": "Stale revision"
+          },
+          "413": {
+            "description": "Body must be 1–12000 bytes"
+          },
+          "503": {
+            "description": "Oracle, DPAPI or storage unavailable; details are redacted"
+          }
+        },
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-LKH-Admin-Action",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "revision": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                },
+                "required": [
+                  "revision"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/api/oracle/connections/{ident}/test": {
+      "parameters": [
+        {
+          "in": "path",
+          "name": "ident",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "post": {
+        "summary": "Run fixed DUAL query with saved credentials, including disabled profiles",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid fields or input format"
+          },
+          "401": {
+            "description": "Session required"
+          },
+          "403": {
+            "description": "Origin/Host/CSRF denied"
+          },
+          "404": {
+            "description": "Unknown connection"
+          },
+          "409": {
+            "description": "Stale revision"
+          },
+          "413": {
+            "description": "Body must be 1–12000 bytes"
+          },
+          "503": {
+            "description": "Oracle, DPAPI or storage unavailable; details are redacted"
+          }
+        },
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-LKH-Admin-Action",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/api/repositories": {
+      "get": {
+        "summary": "List approved GitHub repositories",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "repositories": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Repository"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid fields"
+          },
+          "401": {
+            "description": "Session required"
+          },
+          "403": {
+            "description": "Origin/Host/CSRF denied"
+          },
+          "404": {
+            "description": "Unknown approval"
+          },
+          "409": {
+            "description": "Stale revision, duplicate alias, maximum 10 or running job"
+          },
+          "413": {
+            "description": "Body must be 1–2048 bytes"
+          },
+          "503": {
+            "description": "Storage or migration unavailable"
+          }
+        }
+      },
+      "post": {
+        "summary": "Create approval (maximum 10, unique alias)",
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Repository"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid fields"
+          },
+          "401": {
+            "description": "Session required"
+          },
+          "403": {
+            "description": "Origin/Host/CSRF denied"
+          },
+          "404": {
+            "description": "Unknown approval"
+          },
+          "409": {
+            "description": "Stale revision, duplicate alias, maximum 10 or running job"
+          },
+          "413": {
+            "description": "Body must be 1–2048 bytes"
+          },
+          "503": {
+            "description": "Storage or migration unavailable"
+          }
+        },
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-LKH-Admin-Action",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RepositoryCreate"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/api/repositories/{ident}": {
+      "parameters": [
+        {
+          "in": "path",
+          "name": "ident",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "put": {
+        "summary": "Modify approval; running jobs block; queued jobs cancelled on change",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Repository"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid fields"
+          },
+          "401": {
+            "description": "Session required"
+          },
+          "403": {
+            "description": "Origin/Host/CSRF denied"
+          },
+          "404": {
+            "description": "Unknown approval"
+          },
+          "409": {
+            "description": "Stale revision, duplicate alias, maximum 10 or running job"
+          },
+          "413": {
+            "description": "Body must be 1–2048 bytes"
+          },
+          "503": {
+            "description": "Storage or migration unavailable"
+          }
+        },
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-LKH-Admin-Action",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RepositoryUpdate"
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Revoke approval; running jobs block; queued jobs cancelled",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "deleted": {
+                      "type": "boolean"
+                    },
+                    "cancelled_jobs": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid fields"
+          },
+          "401": {
+            "description": "Session required"
+          },
+          "403": {
+            "description": "Origin/Host/CSRF denied"
+          },
+          "404": {
+            "description": "Unknown approval"
+          },
+          "409": {
+            "description": "Stale revision, duplicate alias, maximum 10 or running job"
+          },
+          "413": {
+            "description": "Body must be 1–2048 bytes"
+          },
+          "503": {
+            "description": "Storage or migration unavailable"
+          }
+        },
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-LKH-Admin-Action",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "revision": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                },
+                "required": [
+                  "revision"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "adminSession": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "lkh_admin_session"
+      }
+    },
+    "schemas": {
+      "Create": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "host": {
+            "type": "string",
+            "maxLength": 253
+          },
+          "port": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 65535
+          },
+          "service": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "sid": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "dsn": {
+            "type": "string",
+            "maxLength": 512,
+            "description": "Optional credential-free DSN. If set, service and sid must be empty."
+          },
+          "username": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512
+          },
+          "allowed_tables": {
+            "type": "string",
+            "maxLength": 2000,
+            "description": "Comma-separated TABLE or OWNER.TABLE. Empty denies table access; * alone allows all visible tables."
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "password": {
+            "type": "string",
+            "writeOnly": true,
+            "maxLength": 1024,
+            "description": "Required for create. Empty on update preserves the stored password.",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "name",
+          "host",
+          "port",
+          "service",
+          "sid",
+          "dsn",
+          "username",
+          "allowed_tables",
+          "enabled",
+          "password"
+        ],
+        "additionalProperties": false
+      },
+      "Update": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "host": {
+            "type": "string",
+            "maxLength": 253
+          },
+          "port": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 65535
+          },
+          "service": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "sid": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "dsn": {
+            "type": "string",
+            "maxLength": 512,
+            "description": "Optional credential-free DSN. If set, service and sid must be empty."
+          },
+          "username": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512
+          },
+          "allowed_tables": {
+            "type": "string",
+            "maxLength": 2000,
+            "description": "Comma-separated TABLE or OWNER.TABLE. Empty denies table access; * alone allows all visible tables."
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "password": {
+            "type": "string",
+            "writeOnly": true,
+            "maxLength": 1024,
+            "description": "Required for create. Empty on update preserves the stored password.",
+            "minLength": 0
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "name",
+          "host",
+          "port",
+          "service",
+          "sid",
+          "dsn",
+          "username",
+          "allowed_tables",
+          "enabled",
+          "password",
+          "revision"
+        ],
+        "additionalProperties": false
+      },
+      "Connection": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "host": {
+            "type": "string",
+            "maxLength": 253
+          },
+          "port": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 65535
+          },
+          "service": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "sid": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "dsn": {
+            "type": "string",
+            "maxLength": 512,
+            "description": "Optional credential-free DSN. If set, service and sid must be empty."
+          },
+          "username": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512
+          },
+          "allowed_tables": {
+            "type": "string",
+            "maxLength": 2000,
+            "description": "Comma-separated TABLE or OWNER.TABLE. Empty denies table access; * alone allows all visible tables."
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "id": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "integer"
+          },
+          "updated_at": {
+            "type": "string"
+          },
+          "password_configured": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "name",
+          "host",
+          "port",
+          "service",
+          "sid",
+          "dsn",
+          "username",
+          "allowed_tables",
+          "enabled",
+          "id",
+          "revision",
+          "updated_at",
+          "password_configured"
+        ],
+        "additionalProperties": false
+      },
+      "RepositoryCreate": {
+        "type": "object",
+        "properties": {
+          "alias": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,40}$"
+          },
+          "repository": {
+            "type": "string",
+            "maxLength": 140,
+            "description": "GitHub owner/repository, not a URL or local path"
+          }
+        },
+        "required": [
+          "alias",
+          "repository"
+        ],
+        "additionalProperties": false
+      },
+      "RepositoryUpdate": {
+        "type": "object",
+        "properties": {
+          "alias": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,40}$"
+          },
+          "repository": {
+            "type": "string",
+            "maxLength": 140,
+            "description": "GitHub owner/repository, not a URL or local path"
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "alias",
+          "repository",
+          "revision"
+        ],
+        "additionalProperties": false
+      },
+      "Repository": {
+        "type": "object",
+        "properties": {
+          "alias": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,40}$"
+          },
+          "repository": {
+            "type": "string",
+            "maxLength": 140,
+            "description": "GitHub owner/repository, not a URL or local path"
+          },
+          "id": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "integer"
+          },
+          "updated_at": {
+            "type": "string"
+          },
+          "cancelled_jobs": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "alias",
+          "repository",
+          "revision",
+          "updated_at"
+        ],
+        "additionalProperties": false
+      }
+    }
+  }
+}

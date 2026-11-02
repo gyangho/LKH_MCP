@@ -26,21 +26,28 @@ instrument_routes(mcp)
 
 
 @mcp.tool()
-def oracle_select_dual() -> dict:
+def oracle_list_connections() -> dict:
+    """List enabled Oracle connection IDs and labels; select an ID before querying."""
+    from oracle_connections import list_connections
+    return {"connections": list_connections(mcp=True)}
+
+
+@mcp.tool()
+def oracle_select_dual(connection_id: str) -> dict:
     """Run fixed SELECT 'MCP_OK' FROM DUAL; verify Oracle connectivity."""
-    return test_select()
+    return test_select(connection_id)
 
 
 @mcp.tool()
-def oracle_list_tables(limit: int = 30) -> dict:
+def oracle_list_tables(connection_id: str, limit: int = 30) -> dict:
     """List up to 100 allowlisted tables accessible to the Oracle user."""
-    return list_tables(limit)
+    return list_tables(connection_id, limit)
 
 
 @mcp.tool()
-def oracle_preview_table(table_name: str, limit: int = 5) -> dict:
+def oracle_preview_table(connection_id: str, table_name: str, limit: int = 5) -> dict:
     """Preview up to 20 rows of an allowlisted table."""
-    return preview_table(table_name, limit)
+    return preview_table(connection_id, table_name, limit)
 
 
 register_uiux_tools(mcp)
@@ -53,6 +60,10 @@ register_instruction_admin(mcp)
 from operations_routes import register_operations_routes
 register_operations_routes(mcp)
 register_routes(mcp)
+from oracle_routes import register_oracle_routes
+register_oracle_routes(mcp)
+from repository_routes import register_repository_routes
+register_repository_routes(mcp)
 
 # Native-only privileged APIs, never registered in the Docker deployment.
 if os.getenv("LKH_NATIVE_MODE") == "1":

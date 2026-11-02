@@ -64,7 +64,7 @@ graphify-out/
 Thumbs.db
 Desktop.ini
 
-# Docker credentials and local overrides (bootstrap.example.json is tracked)
+# Local credentials and runtime configuration
 /secrets/bootstrap.json
 /windows_agent/config.json
 frontend/node_modules/

@@ -10,7 +10,7 @@ on:
       - 'scripts/windows-version.txt'
       - 'frontend/**'
       - 'branding/**'
-      - 'requirements*.txt'
+      - 'requirements/**'
       - 'installer/**'
       - 'windows_agent/**'
       - '.github/workflows/windows-native.yaml'
@@ -23,7 +23,7 @@ on:
       - 'scripts/windows-version.txt'
       - 'frontend/**'
       - 'branding/**'
-      - 'requirements*.txt'
+      - 'requirements/**'
       - '.github/workflows/windows-native.yaml'
 
 permissions:
@@ -61,7 +61,7 @@ jobs:
         shell: pwsh
         run: |
           $env:PYTHONPATH = "src"
-          python -m pip install -r requirements.txt -r requirements-native-build.txt
+          python -m pip install -r requirements/runtime.txt -r requirements/windows.txt
           python -m unittest discover -s tests -t . -p 'test_native_*.py' -v
       - name: Build unsigned native preview and check bundled assets
         shell: pwsh

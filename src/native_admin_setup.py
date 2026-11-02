@@ -12,6 +12,7 @@ import json
 import os
 import re
 import secrets
+import sys
 from pathlib import Path
 
 
@@ -45,7 +46,8 @@ def initialize(*, username: str = "admin", root: Path | None = None,
             json.dump(content, out, ensure_ascii=False)
         if target.exists():
             raise FileExistsError("Another process configured the administrator")
-        os.replace(temporary, target)
+        # Atomic no-replace publication: concurrent setup can never overwrite credentials.
+        os.link(temporary, target)
     finally:
         temporary.unlink(missing_ok=True)
     return {"configured": True, "unchanged": False}
@@ -54,10 +56,24 @@ def initialize(*, username: str = "admin", root: Path | None = None,
 def main(argv=None):
     parser = argparse.ArgumentParser()
     parser.add_argument("--initialize", action="store_true")
+    parser.add_argument("--stdin-json", action="store_true", help="Receive installer credentials over a private stdin pipe")
     args = parser.parse_args(argv)
     if os.name != "nt" or not args.initialize:
         parser.error("Windows interactive administrator setup required")
-    result = initialize()
+    try:
+        if args.stdin_json:
+            # ASCII JSON escapes avoid console code-page dependence. Never echo input.
+            raw = sys.stdin.read(8193)
+            if len(raw) > 8192:
+                raise ValueError("Invalid installer credential payload")
+            data = json.loads(raw)
+            if not isinstance(data, dict) or set(data) != {"username", "password"}:
+                raise ValueError("Invalid installer credential payload")
+            result = initialize(username=data["username"], password=data["password"])
+        else:
+            result = initialize()
+    except (ValueError, TypeError, OSError, EOFError):
+        parser.exit(1, "Administrator setup failed; existing configuration was preserved.\n")
     print("LKH MCP administrator configured." if not result["unchanged"]
           else "Existing administrator bootstrap preserved.")
 

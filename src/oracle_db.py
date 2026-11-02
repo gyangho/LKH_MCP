@@ -14,10 +14,6 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Iterator
 
-from dotenv import load_dotenv
-
-load_dotenv(dotenv_path=Path(__file__).resolve().parent.parent / '.env')
-
 _IDENTIFIER = re.compile(r"^[A-Za-z][A-Za-z0-9_$#]{0,29}$")
 _oracledb = None
 _client_initialized = False
@@ -41,13 +37,13 @@ def validate_table_reference(name: str) -> str:
     return ".".join(validate_identifier(part) for part in parts)
 
 
-def get_allowed_tables() -> set[str]:
+def get_allowed_tables(raw: str) -> set[str]:
     """Return explicit allowlist, or {"*"} for all visible Oracle tables.
 
     Wildcard is intentionally opt-in and must appear alone. Database permissions
     are still enforced by Oracle; never expose this mode without MCP auth.
     """
-    raw = os.getenv("ORACLE_ALLOWED_TABLES", "").strip()
+    raw = raw.strip()
     if raw == "*":
         return {"*"}
     if "*" in raw:
@@ -73,14 +69,12 @@ def _driver():
         return _oracledb
 
 
-def _get_dsn(driver) -> str:
-    custom_dsn = os.getenv("ORACLE_DSN", "").strip()
+def _get_dsn(driver, profile) -> str:
+    custom_dsn = profile["dsn"]
     if custom_dsn:
         return custom_dsn
-    host = os.getenv("ORACLE_HOST", "127.0.0.1").strip()
-    port = int(os.getenv("ORACLE_PORT", "1521"))
-    service = os.getenv("ORACLE_SERVICE", "").strip()
-    sid = os.getenv("ORACLE_SID", "").strip()
+    host, port = profile["host"], profile["port"]
+    service, sid = profile["service"], profile["sid"]
     if bool(service) == bool(sid):
         raise ValueError("Configure exactly one of ORACLE_SERVICE or ORACLE_SID (or use ORACLE_DSN)")
     if sid:
@@ -88,18 +82,26 @@ def _get_dsn(driver) -> str:
     return driver.makedsn(host, port, service_name=service)
 
 
+class OracleUnavailable(RuntimeError):
+    pass
+
+
 @contextmanager
-def connection() -> Iterator:
-    driver = _driver()
-    user = os.getenv("ORACLE_USER", "").strip()
-    password = os.getenv("ORACLE_PASSWORD", "")
-    if not user or not password or password == "CHANGE_ME":
-        raise ValueError("Set ORACLE_USER and a real ORACLE_PASSWORD in .env")
-    dsn = _get_dsn(driver)
-    with driver.connect(user=user, password=password, dsn=dsn) as conn:
-        # Oracle client call timeout, milliseconds. Protect against stalled queries.
-        conn.call_timeout = 8000
-        yield conn
+def connection(profile) -> Iterator:
+    try:
+        driver = _driver()
+        with driver.connect(user=profile["username"], password=profile["password"],
+                            dsn=_get_dsn(driver, profile), tcp_connect_timeout=8, retry_count=0) as conn:
+            conn.call_timeout = 8000
+            yield conn
+    except Exception:
+        # Never return driver errors containing DSNs, accounts or credentials.
+        raise OracleUnavailable("Oracle connection or query failed") from None
+
+
+def _profile(connection_id, *, allow_disabled=False):
+    from oracle_connections import credentials
+    return credentials(connection_id, allow_disabled=allow_disabled)
 
 
 def _clean_cell(value):
@@ -117,9 +119,10 @@ def _clean_cell(value):
     return text if len(text) <= 512 else text[:512] + "…[truncated]"
 
 
-def test_select() -> dict:
+def test_select(connection_id: str, *, allow_disabled=False) -> dict:
     """Fixed safe SELECT from Oracle DUAL; proves driver/DB path is functioning."""
-    with connection() as conn:
+    profile = _profile(connection_id, allow_disabled=allow_disabled)
+    with connection(profile) as conn:
         with conn.cursor() as cur:
             cur.execute("SELECT 'MCP_OK' AS STATUS FROM DUAL")
             row = cur.fetchone()
@@ -129,13 +132,14 @@ def test_select() -> dict:
                     "mode": "Thin" if conn.thin else "Thick"}
 
 
-def list_tables(limit: int = 30) -> dict:
+def list_tables(connection_id: str, limit: int = 30) -> dict:
     """List explicitly allowlisted tables or all ALL_TABLES in '*' mode."""
     limit = max(1, min(int(limit), 100))
-    allowed = sorted(get_allowed_tables())
+    profile = _profile(connection_id)
+    allowed = sorted(get_allowed_tables(profile["allowed_tables"]))
     if not allowed:
-        return {"tables": [], "count": 0, "notice": "Set ORACLE_ALLOWED_TABLES to enable table discovery"}
-    with connection() as conn:
+        return {"tables": [], "count": 0, "notice": "Configure this connection’s allowed tables to enable discovery"}
+    with connection(profile) as conn:
         with conn.cursor() as cur:
             if allowed == ["*"]:
                 # 11g-compatible pagination; only fetch up to the requested cap.
@@ -159,22 +163,26 @@ def list_tables(limit: int = 30) -> dict:
                         break
     return {"tables": visible, "count": len(visible), "max_rows": limit, "all_visible_mode": allowed == ["*"]}
 
-def preview_table(table_name: str, limit: int = 5) -> dict:
+def preview_table(connection_id: str, table_name: str, limit: int = 5) -> dict:
     """Preview only an explicit allowlist table accessible to the DB account."""
     ref = validate_table_reference(table_name)
-    allowed = get_allowed_tables()
-    if "*" not in allowed and ref not in allowed:
-        raise PermissionError("Table is not allowlisted in ORACLE_ALLOWED_TABLES")
+    profile = _profile(connection_id)
+    allowed = get_allowed_tables(profile["allowed_tables"])
+    if "*" not in allowed and ref not in allowed and ref.split(".")[-1] not in allowed:
+        raise PermissionError("Table is not allowlisted for this connection")
     limit = max(1, min(int(limit), 20))
-    with connection() as conn:
+    with connection(profile) as conn:
         with conn.cursor() as cur:
             cur.execute("SELECT USER FROM DUAL")
             username = cur.fetchone()[0]
             owner, table = ref.split(".") if "." in ref else (username, ref)
+            if "*" not in allowed and ref not in allowed and not (owner == username and table in allowed):
+                raise PermissionError("Table is not allowlisted for this connection")
             cur.execute("SELECT COUNT(*) FROM ALL_TABLES WHERE OWNER=:owner AND TABLE_NAME=:name",
                         owner=owner, name=table)
             if cur.fetchone()[0] != 1:
                 raise PermissionError("Table is not accessible to the DB user")
+            owner, table = validate_identifier(owner), validate_identifier(table)
             # Both identifiers were validated before interpolation.
             cur.execute(f'SELECT * FROM "{owner}"."{table}" WHERE ROWNUM <= :max_rows', max_rows=limit)
             columns = [col[0] for col in cur.description]

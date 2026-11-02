@@ -2,9 +2,11 @@ import React, { useCallback, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import "./style.css";
 import pigMark from "../../branding/pig-terminal.png";
+import { ApprovedRepositories } from "./approved_repositories";
+import { OracleConnections } from "./oracle_connections";
 import { CodexEventStream, InstructionsPanel, OperationsPanel } from "./phase_panels";
 
-type Page = "overview" | "tools" | "config" | "codex" | "instructions" | "operations";
+type Page = "overview" | "tools" | "config" | "oracle" | "codex" | "instructions" | "operations";
 type SettingsItem = {
   key: string;
   category: string;
@@ -79,7 +81,8 @@ type Status = {
   server_time?: string;
 };
 const currentPage = (): Page =>
-  location.pathname.includes("/instructions") ? "instructions"
+  location.pathname.includes("/oracle") ? "oracle"
+    : location.pathname.includes("/instructions") ? "instructions"
     : location.pathname.includes("/operations") ? "operations"
     : location.pathname.includes("/codex")
     ? "codex"
@@ -90,6 +93,7 @@ const labels: Record<Page, string> = {
   overview: "서버 모니터링",
   tools: "도구 권한",
   config: "환경 설정",
+  oracle: "Oracle 연결",
   codex: "Codex 관리",
   instructions: "MCP 지침 관리",
   operations: "로그·리소스 관측",
@@ -98,6 +102,7 @@ const paths: Record<Page, string> = {
   overview: "/admin",
   tools: "/admin?view=tools",
   config: "/admin/config",
+  oracle: "/admin/oracle",
   codex: "/admin/codex",
   instructions: "/admin/instructions",
   operations: "/admin/operations",
@@ -107,9 +112,9 @@ const categories: Record<string, string> = {
   codex: "Codex",
   oracle: "Oracle",
 };
-async function api<T>(path: string, body?: unknown): Promise<T> {
+async function api<T>(path: string, body?: unknown, method?: string): Promise<T> {
   const response = await fetch(path, {
-    method: body === undefined ? "GET" : "POST",
+    method: method ?? (body === undefined ? "GET" : "POST"),
     credentials: "same-origin",
     cache: "no-store",
     headers:
@@ -361,7 +366,7 @@ function Config({
   items: SettingsItem[];
   refresh: () => void;
   audit: Array<{ key: string; actor: string; at: string }>;
-  secret: { oracle: boolean; local_admin: boolean };
+  secret: { local_admin: boolean };
 }) {
   const [category, setCategory] = useState("git");
   const [draft, setDraft] = useState<Record<string, string>>({});
@@ -413,8 +418,8 @@ function Config({
           <strong>{items.length}</strong>
         </article>
         <article className="metric">
-          <div className="muted">Oracle 비밀정보</div>
-          <strong>{secret.oracle ? "설정됨" : "미설정"}</strong>
+          <div className="muted">Oracle 연결 관리</div>
+          <strong>Oracle 연결 메뉴</strong>
         </article>
         <article className="metric">
           <div className="muted">관리자 인증</div>
@@ -434,7 +439,7 @@ function Config({
             </button>
           ))}
         </nav>
-        <section className="panel">
+        {category === "git" ? <ApprovedRepositories request={api} /> : <section className="panel">
           <h2>{categories[category]} 설정</h2>
           <p className="hint">
             민감한 비밀번호는 화면에 표시되지 않습니다. 변경사항은 저장 시 즉시
@@ -486,7 +491,7 @@ function Config({
               </div>
             );
           })}
-        </section>
+        </section>}
       </div>
       <section className="panel">
         <h2>최근 설정 변경 이력</h2>
@@ -727,7 +732,7 @@ function App() {
     [audit, setAudit] = useState<
       Array<{ key: string; actor: string; at: string }>
     >([]),
-    [secret, setSecret] = useState({ oracle: false, local_admin: false }),
+    [secret, setSecret] = useState({ local_admin: false }),
     [tasks, setTasks] = useState<CodexTask[]>([]),
     [agents, setAgents] = useState<CodexAgentsResponse | null>(null),
     [nativeHost, setNativeHost] = useState<NativeHost | null>(null),
@@ -743,7 +748,7 @@ function App() {
         api<{
           settings: SettingsItem[];
           audit: Array<{ key: string; actor: string; at: string }>;
-          secrets_configured: { oracle: boolean; local_admin: boolean };
+          secrets_configured: { local_admin: boolean };
         }>("/admin/api/config"),
         api<{ tasks: CodexTask[] }>("/admin/api/codex/tasks"),
         api<CodexAgentsResponse>("/admin/api/codex/agents"),
@@ -759,7 +764,7 @@ function App() {
             const c = r.value as {
               settings: SettingsItem[];
               audit: Array<{ key: string; actor: string; at: string }>;
-              secrets_configured: { oracle: boolean; local_admin: boolean };
+              secrets_configured: { local_admin: boolean };
             };
             setItems(c.settings);
             setAudit(c.audit);
@@ -786,7 +791,7 @@ function App() {
     }
   }, []);
   useEffect(() => {
-    if (login || page === "operations" || page === "instructions") return;
+    if (login || page === "operations" || page === "instructions" || page === "oracle") return;
     void refresh();
     const timer = setInterval(() => {
       if (!document.hidden) void refresh();
@@ -876,6 +881,8 @@ function App() {
             secret={secret}
             refresh={() => void refresh()}
           />
+        ) : page === "oracle" ? (
+          <OracleConnections request={api} />
         ) : page === "instructions" ? (
           <InstructionsPanel />
         ) : page === "operations" ? (

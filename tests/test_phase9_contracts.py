@@ -26,12 +26,12 @@ class SkillContractTests(unittest.TestCase):
 
     def test_release_gates_documented(self):
         roadmap = (ROOT / "docs" / "ROADMAP.md").read_text(encoding="utf-8")
-        ledger = (ROOT / "docs" / "PHASES_1_9_STATUS.md").read_text(encoding="utf-8")
+        ledger = (ROOT / "docs" / "VERIFICATION.md").read_text(encoding="utf-8")
         for phase in range(1, 10):
             self.assertIn(f"| **{phase}** ", roadmap)
             self.assertIn(f"| {phase} |", ledger)
-        self.assertIn("cutover", ledger.lower())
-        self.assertIn("not been modified", ledger.lower())
+        self.assertIn("운영 전환", ledger)
+        self.assertIn("실환경", ledger)
 
 
 if __name__ == "__main__":

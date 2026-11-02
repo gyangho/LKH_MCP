@@ -1,4 +1,4 @@
-"""SQLite configuration store for LKH MCP. Secrets never enter the database."""
+"""SQLite configuration store for LKH MCP. Plaintext secrets never enter the database."""
 from __future__ import annotations
 
 import json
@@ -15,17 +15,9 @@ _READY = False
 
 # key: (category, label, type, default, description)
 FIELDS = {
-    "GIT_ALLOWED_REPOS": ("git", "허용 Git 저장소", "text", "", "PROJECT=owner/repo;..."),
     "CODEX_AGENT_ENABLED": ("codex", "Windows Codex Agent 허용", "bool", False, "Windows Agent 작업 요청 허용"),
     "CODEX_MAX_RUNS_PER_DAY": ("codex", "일일 Codex 실행 제한", "int", 30, "1~100회"),
-    "ORACLE_HOST": ("oracle", "Oracle 주소", "text", "127.0.0.1", "Docker라면 host.docker.internal 또는 DB 주소"),
-    "ORACLE_PORT": ("oracle", "Oracle 포트", "int", 1521, "1~65535"),
-    "ORACLE_SERVICE": ("oracle", "서비스 이름", "text", "", "SERVICE 또는 SID 중 한 개"),
-    "ORACLE_SID": ("oracle", "SID", "text", "", "SERVICE 대신 사용할 경우"),
-    "ORACLE_DSN": ("oracle", "DSN", "text", "", "설정된 경우 HOST/PORT 대신 사용"),
-    "ORACLE_USER": ("oracle", "DB 사용자", "text", "", "Oracle 읽기 전용 계정"),
-    "ORACLE_ALLOWED_TABLES": ("oracle", "조회 허용 테이블", "text", "", "쉼표 구분, 명시적 허용 목록"),
-    "ORACLE_CLIENT_LIB_DIR": ("oracle", "Oracle Client 디렉터리", "text", "", "Thick 모드 사용 시 컨테이너 경로"),
+    "ORACLE_CLIENT_LIB_DIR": ("oracle", "Oracle Client 디렉터리", "text", "", "서버 공통 Thick 모드: Instant Client 절대 경로 (변경 후 재시작)"),
 }
 SECRETS = frozenset({"ORACLE_PASSWORD", "ADMIN_CF_TEAM", "ADMIN_CF_AUD", "ADMIN_ALLOWED_EMAILS", "ADMIN_PUBLIC_ORIGIN", "ADMIN_PASSWORD_HASH", "ADMIN_LOGIN_USER", "CODEX_AGENT_TOKEN"})
 _PATH_FIELDS = {"ORACLE_CLIENT_LIB_DIR"}
@@ -67,20 +59,6 @@ def _validate(key: str, value: Any) -> Any:
             raise ValueError("설정 텍스트 길이 또는 문자 제한 위반")
         if key in _PATH_FIELDS and value and not Path(value).is_absolute():
             raise ValueError("경로는 절대 경로여야 합니다.")
-        if key == "GIT_ALLOWED_REPOS" and value:
-            entries = value.split(";")
-            if len(entries) > 10:
-                raise ValueError("프로젝트는 최대 10개입니다.")
-            seen_names = set()
-            for entry in entries:
-                if "=" not in entry:
-                    raise ValueError("PROJECT=경로 또는 PROJECT=owner/repo 형식이 필요합니다.")
-                name, target = (part.strip() for part in entry.split("=", 1))
-                if not re.fullmatch(r"[A-Za-z0-9_-]{1,40}", name) or not target or name in seen_names:
-                    raise ValueError("프로젝트 별칭 중복 또는 PROJECT=대상 형식 오류입니다.")
-                seen_names.add(name)
-        if key == "ORACLE_ALLOWED_TABLES" and len(value) > 2000:
-            raise ValueError("테이블 허용 목록이 너무 깁니다.")
     return value
 
 

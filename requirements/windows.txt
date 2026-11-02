@@ -1,0 +1,2 @@
+# Windows-only packaging/runtime dependencies.
+pywin32>=306,<400

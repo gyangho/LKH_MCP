@@ -1,27 +1,8 @@
-# 아키텍처 — AS-IS / TO-BE
+# Windows Native 아키텍처
 
-2026-10-30 · 목표 아키텍처는 **계획**이며 실제 배포가 아니다.
+2026-11-02 · Native 구성은 staging 코드로 구현되어 있으나 실제 운영 전환을 뜻하지 않는다.
 
-## AS-IS: Naru + Windows Agent
-
-```text
-ChatGPT → Cloudflare MCP Portal/Private CIDR → Naru Nginx :8000 (/mcp만)
-관리자 WARP Private Access → Windows :8001 → Naru Nginx :8001 (/admin만)
-                                            ↓
-                                 Python MCP (Docker :8000)
-                                 SQLite mcp-data volume
-                                            ↑
-Windows Agent.py (Codex 로그인 사용자) → loopback outbound /admin/agent/*
-    ├─ allowlisted Git checkout + exact expected SHA / clean tree
-    └─ detached temporary worktree → Codex CLI / Graphify skill
-```
-
-- Nginx 8000은 `/mcp`, `/mcp/` 외 404, 8001은 `/admin`/`/admin/*` 외 404. 단일 Python backend의 내부 포트에 직접 접근하면 분리 보장이 사라지므로 **게이트웨이 우회 불허**.
-- 관리자 세션·Origin/Host CSRF·WARP 개인 정책과 Windows Agent token은 별도 인증 계층이다.
-- Queue 상태/Graphify 결과는 SQLite, Agent는 저장소를 임시 worktree에서만 읽고 수정안은 제안만 한다.
-- `src/server_launcher.py`/`src/tray.py`는 기존 서버+트레이 결합 **시제품**이다. 서비스/독립 트레이 Installer가 아니다.
-
-## TO-BE: Windows Native
+## Windows Native: staging 구현 및 목표
 
 ```text
        LKH-MCP-Setup.exe [서명/설치/업데이트/제거]
@@ -33,7 +14,7 @@ Windows SCM         사용자 로그인     Windows Task Scheduler
 저권한 서비스 계정  세션 트레이 UI     Codex 로그인 계정
       │                │                  │
       ├─ MCP / Admin    │                  ├─ Git SHA/Repo allowlist
-      ├─ SQLite         └─ ACL IPC────────┤  + Codex CLI
+      ├─ SQLite         └─ loopback 상태───┤  + Codex CLI
       ├─ 보안 이벤트/로그                  │
       └─ 고정 Task Scheduler 작업 제어────┘
 ```
@@ -42,13 +23,21 @@ Windows SCM         사용자 로그인     Windows Task Scheduler
 - Service에서 사전 등록된 이름의 스케줄러 작업만 제어. 원격 arbitrary command/shell 금지.
 - 원본 컬러 Pixel Pig = 최근 인증된 heartbeat로 Agent Online, 흑백 = 서버 정상·Agent Offline, 회색 = 서버/상태 판별 불가. Busy/Error는 텍스트/경고로 구분. 시각 원본은 `branding/pig-terminal.png`.
 - 저장 위치 목표: `%ProgramFiles%\LKH MCP\` 바이너리(사용자 쓰기 불가), `%ProgramData%\LKH-MCP\` DB/설정/로그/백업(서비스 ACL). Codex 로그인/기기 개인키는 사용자/OS 보호 저장소에 분리.
-- 한 PC 내 인증은 Windows Named Pipe ACL·OS identity + CNG/DPAPI 키 활용을 검토. 원격 Agent는 범위 밖.
+- 같은 PC 인증은 machine-DPAPI 보호 secret과 loopback 단기 토큰을 사용한다. CNG 비내보내기 키와 challenge-response는 미구현이며 원격 Agent는 범위 밖이다.
 - 서버 라우팅은 8000 MCP-only, 8001 Admin-only와 동등한 방화벽/정확한 경로 필터를 실기에서 증명. 필요시 별도 listener/reverse proxy 유지하되 인터넷 공개 금지.
 - Oracle 11g가 필요하면 Windows Thick driver/Instant Client 검증; 인스톨러가 Oracle 데이터베이스를 설치·변경하지 않는다.
-- Native 스테이징은 원본 Docker SQLite 볼륨을 공유하지 않는다. 백업한 **복제본**에서 검증하고 별도 컷오버 승인 전 원본과 동시 쓰기 금지.
 
 ## 실패 및 안전 조건
 
 Agent 시작 요청 성공은 스케줄러의 수락일 뿐이며 실제 성공은 인증 Heartbeat로 판정. Offline과 Unknown 혼동 금지. 네트워크 끊김/lease 만료는 임의 재실행이 아닌 실패·관리자 검토. Codex 실행은 임시 디렉터리 ACL 실패를 결과/정리 실패로 각각 기록해야 한다.
 
-현재 Docker 제거/Cloudflare 라우팅 변경/운영 DB 스키마 파괴는 이 설계 문서의 승인 범위에 포함되지 않는다.
+
+운영 DB 및 네트워크 변경은 별도 승인과 백업·복구 검증이 필요하다.
+
+## Oracle 연결과 설치 초기 설정
+
+설치 마법사 → 관리자 계정·암호 검증 → 비공개 stdin 파이프 → 초기 설정 도우미 → 암호 해시 bootstrap의 순서로 최초 관리자를 구성한다. 기존 설정은 원자적 no-replace 저장으로 보존한다. Oracle 접속정보는 설치기에서 입력받지 않는다.
+
+관리자 Oracle 화면 → 세션·CSRF 관리 API → 연결 저장소(SQLite metadata + machine-DPAPI 암호문) → connection_id로 선택한 요청별 Oracle 연결의 순서다. Client 초기화만 프로세스 공통이고 계정·DSN·조회 허용 목록은 연결별이다. 연결 풀은 공유하지 않고 요청 종료 시 닫는다.
+
+승인 저장소는 SQLite `approved_repositories`에서 관리하며 Codex 큐와 같은 트랜잭션 경계에서 승인 변경·대기 작업 취소를 처리한다. 실행 중인 프로젝트의 승인은 변경할 수 없다. Agent의 로컬 checkout 매핑은 이 서버 목록과 독립적으로 검증한다.

@@ -44,8 +44,6 @@ Name: "{group}\Open LKH MCP Admin"; Filename: "http://127.0.0.1:8001/admin"
 Name: "{group}\Uninstall LKH MCP"; Filename: "{uninstallexe}"
 
 [Run]
-Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File ""{app}\scripts\native-installer-preflight.ps1"" -InstallDir ""{app}"""; Flags: runhidden waituntilterminated
-Filename: "{app}\LKH-MCP-Admin-Setup\LKH-MCP-Admin-Setup.exe"; Parameters: "--initialize"; Flags: waituntilterminated
 Filename: "{app}\LKH-MCP-Enroll\LKH-MCP-Enroll.exe"; Parameters: "--provision"; Flags: runhidden waituntilterminated
 Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File ""{app}\scripts\install-agent-task.ps1"" -InstallDir ""{app}"" -AgentUser ""{code:GetAgentUser}"" -ProjectAlias ""{code:GetProjectAlias}"" -Repository ""{code:GetRepository}"" -CheckoutPath ""{code:GetCheckoutPath}"""; Flags: runhidden waituntilterminated
 Filename: "{app}\LKH-MCP-Service\LKH-MCP-Service.exe"; Parameters: "--startup auto --username ""NT AUTHORITY\LocalService"" install"; Flags: runhidden waituntilterminated
@@ -56,12 +54,23 @@ Filename: "{app}\LKH-MCP-Tray\LKH-MCP-Tray.exe"; Description: "Start Pixel Pig t
 
 [Code]
 var
+  AdminPage: TInputQueryWizardPage;
   AgentPage: TInputQueryWizardPage;
   ProjectPage: TInputQueryWizardPage;
 
 procedure InitializeWizard;
 begin
-  AgentPage := CreateInputQueryPage(wpSelectDir,
+  AdminPage := CreateInputQueryPage(wpSelectDir,
+    'LKH MCP administrator', 'Create your administrator account',
+    'First installation only. Existing credentials are preserved. Oracle connections are managed after installation.');
+  AdminPage.Add('Administrator account:', False);
+  AdminPage.Add('Password (14-256 characters):', True);
+  AdminPage.Add('Repeat password:', True);
+  AdminPage.Values[0] := 'admin';
+  AdminPage.Edits[0].MaxLength := 64;
+  AdminPage.Edits[1].MaxLength := 256;
+  AdminPage.Edits[2].MaxLength := 256;
+  AgentPage := CreateInputQueryPage(AdminPage.ID,
     'Codex Agent Windows user', 'Select the logged-in Codex CLI account',
     'The Agent starts only after a project checkout is configured and the Codex CLI login account is available.');
   AgentPage.Add('Agent username (DOMAIN\User or local name):', False);
@@ -97,11 +106,29 @@ begin
   Result := Trim(ProjectPage.Values[2]);
 end;
 
+function ValidAdministratorName(Value: String): Boolean;
+var
+  I: Integer;
+begin
+  Result := (Length(Value) >= 1) and (Length(Value) <= 64);
+  for I := 1 to Length(Value) do
+    if Pos(Copy(Value, I, 1), 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_.-') = 0 then
+      Result := False;
+end;
+
 function NextButtonClick(CurPageID: Integer): Boolean;
 var
   AccountName, Checkout: String;
 begin
   Result := True;
+  if CurPageID = AdminPage.ID then begin
+    if (Length(AdminPage.Values[1]) < 14) or
+       (AdminPage.Values[1] <> AdminPage.Values[2]) or
+       (not ValidAdministratorName(Trim(AdminPage.Values[0]))) then begin
+      MsgBox('Provide an administrator account and matching passwords of at least 14 characters.', mbError, MB_OK);
+      Result := False;
+    end;
+  end;
   if CurPageID = AgentPage.ID then begin
     AccountName := Trim(AgentPage.Values[0]);
     if (AccountName = '') or (Pos('"', AccountName) > 0) or
@@ -130,6 +157,80 @@ begin
   end;
 end;
 
+
+{ Installer credentials travel through stdin, never command-line arguments or files. }
+function AdministratorConfigured(): Boolean;
+begin
+  Result := FileExists(ExpandConstant('{commonappdata}\LKH-MCP\config\bootstrap.json'));
+end;
+
+function ShouldSkipPage(PageID: Integer): Boolean;
+begin
+  Result := (PageID = AdminPage.ID) and AdministratorConfigured();
+end;
+
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+begin
+  Result := '';
+  if not AdministratorConfigured() then begin
+    if (Length(AdminPage.Values[1]) < 14) or
+       (AdminPage.Values[1] <> AdminPage.Values[2]) or
+       (not ValidAdministratorName(Trim(AdminPage.Values[0]))) then
+      Result := 'First installation requires administrator credentials in the interactive wizard.';
+  end;
+end;
+
+function JsonString(Value: String): String;
+var
+  I: Integer;
+begin
+  Result := '"';
+  for I := 1 to Length(Value) do
+    Result := Result + '\u' + IntToHex(Ord(Value[I]), 4);
+  Result := Result + '"';
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+var
+  ExitCode, Attempts: Integer;
+  Shell, Process: Variant;
+  Command, Payload: String;
+begin
+  if CurStep <> ssPostInstall then Exit;
+  if not Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
+    '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' +
+    ExpandConstant('{app}\scripts\native-installer-preflight.ps1') + '" -InstallDir "' +
+    ExpandConstant('{app}') + '"', '', SW_HIDE, ewWaitUntilTerminated, ExitCode) then
+    RaiseException('Service data permission preparation failed.');
+  if ExitCode <> 0 then RaiseException('Service data permission preparation failed.');
+  if AdministratorConfigured() then Exit;
+  try
+    Shell := CreateOleObject('WScript.Shell');
+    Command := '"' + ExpandConstant('{app}\LKH-MCP-Admin-Setup\LKH-MCP-Admin-Setup.exe') +
+      '" --initialize --stdin-json';
+    Process := Shell.Exec(Command);
+    Payload := '{"username":' + JsonString(Trim(AdminPage.Values[0])) +
+      ',"password":' + JsonString(AdminPage.Values[1]) + '}';
+    Process.StdIn.Write(Payload);
+    Process.StdIn.Close;
+    Payload := '';
+    AdminPage.Values[1] := '';
+    AdminPage.Values[2] := '';
+    Attempts := 0;
+    while (Process.Status = 0) and (Attempts < 600) do begin
+      Sleep(100);
+      Attempts := Attempts + 1;
+    end;
+    if Process.Status = 0 then begin
+      Process.Terminate();
+      RaiseException('Administrator setup timed out.');
+    end;
+    if Process.ExitCode <> 0 then RaiseException('Administrator setup failed.');
+  except
+    { Never include a COM exception, process output or credential payload. }
+    RaiseException('Administrator setup failed. Verify the account and password, then retry installation.');
+  end;
+end;
 
 { Uninstaller default: remove program and settings, preserve SQLite/WAL/logs/backups. }
 var
