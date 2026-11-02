@@ -184,21 +184,14 @@ def run_tray() -> None:
                 icon.title = "LKH MCP " + VERSION + " - " + label[current]
                 previous = current
 
-    def close(icon, item):
-        done.set()
-        icon.stop()
-
-    icon.menu = pystray.Menu(
+     icon.menu = pystray.Menu(
         Item("관리자 페이지 열기", open_admin, default=True),
         pystray.Menu.SEPARATOR,
         Item("Agent 시작", lambda i, t: do_action("start")),
         Item("Agent 중지", lambda i, t: do_action("stop")),
         Item("Agent 재시작", lambda i, t: do_action("restart")),
         pystray.Menu.SEPARATOR,
-        Item("MCP 서버 종료 (UAC 승인)", lambda i, t: do_shutdown("server")),
-        Item("서버 + Agent 모두 종료 (UAC 승인)", lambda i, t: do_shutdown("both")),
-        pystray.Menu.SEPARATOR,
-        Item("트레이만 종료 (서버 유지)", close),
+        Item("종료", lambda i, t: do_shutdown("both")),
     )
 
     def setup(icon):

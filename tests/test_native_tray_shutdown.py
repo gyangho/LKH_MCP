@@ -61,6 +61,13 @@ class TrayShutdownTests(unittest.TestCase):
                 tray.shutdown_from_tray("both")
         stop.assert_not_called()
 
+    def test_tray_exposes_only_combined_shutdown_menu(self):
+        source = (Path(__file__).resolve().parents[1] / "src/native_tray.py").read_text(encoding="utf-8")
+        self.assertIn('Item("종료", lambda i, t: do_shutdown("both"))', source)
+        self.assertNotIn('Item("트레이', source)
+        self.assertNotIn('Item("MCP 서버 종료', source)
+        self.assertNotIn('Item("서버 + Agent 모두 종료', source)
+
     def test_arbitrary_shutdown_target_is_not_supported(self):
         with self.assertRaises(ValueError):
             tray.shutdown_from_tray("other")
