@@ -151,6 +151,7 @@ def run_tray() -> None:
         if not shutdown_lock.acquire(blocking=False):
             notice("이미 서버 종료 요청을 처리 중입니다.")
             return
+        owns_lock = True
         try:
             if not _confirm_shutdown(target):
                 return
@@ -164,13 +165,11 @@ def run_tray() -> None:
                 finally:
                     shutdown_lock.release()
             threading.Thread(target=perform, daemon=True, name="LKH-Tray-Stop").start()
+            owns_lock = False
         except (OSError, RuntimeError):
             notice("Windows 종료 확인창을 표시할 수 없습니다.")
         finally:
-            # The worker owns the lock only after confirmation.
-            if not shutdown_lock.locked():
-                return
-            if 'perform' not in locals():
+            if owns_lock:
                 shutdown_lock.release()
 
     def open_admin(icon, item):

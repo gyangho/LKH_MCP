@@ -1,7 +1,7 @@
 """Native tray shutdown regression. No actual Windows SCM, UAC or Task is touched."""
 import unittest
 from pathlib import Path
-from unittest.mock import patch, Mock
+from unittest.mock import patch, MagicMock
 
 import native_tray as tray
 
@@ -66,11 +66,10 @@ class TrayShutdownTests(unittest.TestCase):
             tray.shutdown_from_tray("other")
 
     def test_state_missing_busy_is_not_assumed_idle(self):
-        payload = Mock()
+        payload = MagicMock()
         payload.status = 200
         payload.read.return_value = b'{"state":"online"}'
-        payload.__enter__ = Mock(return_value=payload)
-        payload.__exit__ = Mock(return_value=False)
+        payload.__enter__.return_value = payload
         with patch.object(tray.urllib.request, "urlopen", return_value=payload):
             self.assertEqual(tray.status(), "online")
             self.assertIsNone(tray._read_state()["busy"])
