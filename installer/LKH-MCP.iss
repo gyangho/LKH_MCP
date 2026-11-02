@@ -158,11 +158,10 @@ var
   RemoveButton, CancelButton: TNewButton;
 begin
   Result := False;
-  Form := CreateCustomForm();
+  { Inno Setup 6.6+ requires form size at creation; client size is read-only. }
+  Form := CreateCustomForm(460, 184, False, False);
   try
     Form.Caption := 'LKH MCP 제거 옵션';
-    Form.ClientWidth := ScaleX(460);
-    Form.ClientHeight := ScaleY(184);
     Form.Position := poDesktopCenter;
 
     Description := TNewStaticText.Create(Form);
