@@ -14,7 +14,7 @@ import urllib.request
 import webbrowser
 from pathlib import Path
 
-from native_task_control import control_agent
+from native_task_control import control_agent, task_state
 
 
 def assets_dir() -> Path:
@@ -28,18 +28,85 @@ def _admin_base() -> str:
     return "http://127.0.0.1:" + port
 
 
-def status() -> str:
-    """Read the server's live authenticated-heartbeat verdict, never scheduler alone."""
+def _read_state() -> dict:
+    """Only the loopback Native server can report authenticated Agent/busy state.
+
+    Missing busy metadata must NOT be interpreted as idle for stop actions.
+    """
+    unknown = {"state": "unknown", "busy": None}
     try:
         with urllib.request.urlopen(_admin_base() + "/admin/host/tray-state",
                                     timeout=2) as result:
             if result.status != 200:
-                return "unknown"
+                return unknown
             payload = json.loads(result.read(512).decode("utf-8"))
-        state = payload.get("state") if isinstance(payload, dict) else None
-        return state if state in ("online", "offline", "unknown") else "unknown"
+        if not isinstance(payload, dict):
+            return unknown
+        state, busy = payload.get("state"), payload.get("busy")
+        if state not in ("online", "offline", "unknown"):
+            return unknown
+        return {"state": state, "busy": busy if type(busy) is bool else None}
     except (OSError, ValueError, TypeError, UnicodeError):
-        return "unknown"
+        return unknown
+
+
+def status() -> str:
+    return _read_state()["state"]
+
+
+def _installed_service_binary() -> Path:
+    """Resolve only the adjacent, installer-owned SCM controller executable."""
+    if not getattr(sys, "frozen", False):
+        raise RuntimeError("Native Installer tray is required to stop the service")
+    service = (Path(sys.executable).resolve().parent.parent /
+               "LKH-MCP-Service" / "LKH-MCP-Service.exe")
+    if not service.is_file():
+        raise RuntimeError("LKH-MCP-Service.exe is not installed")
+    return service
+
+
+def _request_scm_stop(executable: Path) -> None:
+    """Request an OS-authorized stop through UAC, never an unauthenticated HTTP API."""
+    import ctypes
+    if os.name != "nt":
+        raise RuntimeError("Windows SCM is required")
+    # The executable and command are fixed: no caller-supplied shell or service name.
+    result = ctypes.windll.shell32.ShellExecuteW(
+        None, "runas", str(executable), "stop", str(executable.parent), 1)
+    if int(result) <= 32:
+        raise PermissionError("Windows UAC denied or could not launch the service stop")
+    # ShellExecuteW acknowledges launch only, not completed service shutdown.
+
+
+def shutdown_from_tray(target: str) -> None:
+    """Safely request shutdown using Windows SCM privileges and Task Scheduler ACLs.
+
+    The tray has no administrator browser cookie; it must never bypass session/CSRF.
+    """
+    if target not in ("server", "both"):
+        raise ValueError("Unknown fixed shutdown target")
+    verdict = _read_state()
+    if verdict["state"] not in ("online", "offline") or verdict["busy"] is not False:
+        raise PermissionError("Cannot confirm that all Codex tasks are idle")
+    service_binary = _installed_service_binary()
+    if target == "both":
+        scheduler = task_state()
+        if scheduler not in ("running", "ready", "disabled"):
+            raise RuntimeError("Agent scheduler state is unknown")
+        if scheduler == "running":
+            control_agent("stop", busy=False)
+    _request_scm_stop(service_binary)
+
+
+def _confirm_shutdown(target: str) -> bool:
+    import ctypes
+    name = "MCP 서버와 Agent" if target == "both" else "MCP 서버"
+    message = (name + "를 종료하시겠습니까?\\n"
+               "현재 작업이 실행 중이면 중단되며, Windows 관리자(UAC) 승인이 필요합니다.\\n"
+               "취소하면 종료하지 않습니다.")
+    # MB_YESNO | MB_ICONWARNING | MB_DEFBUTTON2 (No)
+    return ctypes.windll.user32.MessageBoxW(None, message, "LKH MCP 종료 확인",
+                                            0x4 | 0x30 | 0x100) == 6
 
 
 def run_tray() -> None:
@@ -69,10 +136,42 @@ def run_tray() -> None:
 
     def do_action(action):
         try:
-            result = control_agent(action)
+            verdict = _read_state()
+            if action in ("stop", "restart") and (
+                    verdict["state"] == "unknown" or verdict["busy"] is not False):
+                raise PermissionError("Agent state is unknown or busy")
+            control_agent(action, busy=verdict["busy"] is True)
             notice("작업 요청됨; Agent 상태를 확인하세요.")
-        except (PermissionError, OSError, RuntimeError) as exc:
-            notice("작업 실행 실패: 설치 또는 Windows 작업 권한 확인")
+        except (PermissionError, OSError, RuntimeError):
+            notice("Agent 작업 중 또는 상태 미확인: 관리자 페이지를 확인하세요.")
+
+    shutdown_lock = threading.Lock()
+
+    def do_shutdown(target):
+        if not shutdown_lock.acquire(blocking=False):
+            notice("이미 서버 종료 요청을 처리 중입니다.")
+            return
+        try:
+            if not _confirm_shutdown(target):
+                return
+
+            def perform():
+                try:
+                    shutdown_from_tray(target)
+                    notice("Windows 서비스 종료 요청됨. 실제 중지 상태를 확인하세요.")
+                except (PermissionError, OSError, RuntimeError, ValueError):
+                    notice("종료 실패 또는 UAC 취소: 서비스 권한과 Agent 작업을 확인하세요.")
+                finally:
+                    shutdown_lock.release()
+            threading.Thread(target=perform, daemon=True, name="LKH-Tray-Stop").start()
+        except (OSError, RuntimeError):
+            notice("Windows 종료 확인창을 표시할 수 없습니다.")
+        finally:
+            # The worker owns the lock only after confirmation.
+            if not shutdown_lock.locked():
+                return
+            if 'perform' not in locals():
+                shutdown_lock.release()
 
     def open_admin(icon, item):
         webbrowser.open(_admin_base() + "/admin", new=2)
@@ -97,7 +196,10 @@ def run_tray() -> None:
         Item("Agent 중지", lambda i, t: do_action("stop")),
         Item("Agent 재시작", lambda i, t: do_action("restart")),
         pystray.Menu.SEPARATOR,
-        Item("트레이 종료 (MCP 서버는 유지)", close),
+        Item("MCP 서버 종료 (UAC 승인)", lambda i, t: do_shutdown("server")),
+        Item("서버 + Agent 모두 종료 (UAC 승인)", lambda i, t: do_shutdown("both")),
+        pystray.Menu.SEPARATOR,
+        Item("트레이만 종료 (서버 유지)", close),
     )
 
     def setup(icon):

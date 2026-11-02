@@ -19,14 +19,17 @@ _LAST_ACTION = 0.0
 
 def compute_tray_state(snapshot: dict, scheduler: str) -> dict:
     """Pig green requires a *valid authenticated heartbeat*, not just task RUNNING."""
+    # Preserve active leases even when the Agent heartbeat expires or the task
+    # leaves Running. Tray shutdown must fail closed rather than infer idle.
+    busy = any(a.get("busy") is True for a in snapshot.get("agents", []))
     if scheduler == "unavailable":
-        return {"state": "unknown", "busy": False}
+        return {"state": "unknown", "busy": busy}
     if scheduler != "running":
-        return {"state": "offline", "busy": False}
+        return {"state": "offline", "busy": busy}
     online = [a for a in snapshot.get("agents", []) if a.get("online") is True]
     if not snapshot.get("enabled") or not snapshot.get("token_configured") or not online:
-        return {"state": "offline", "busy": False}
-    return {"state": "online", "busy": any(a.get("busy") is True for a in online)}
+        return {"state": "offline", "busy": busy}
+    return {"state": "online", "busy": busy}
 
 
 
