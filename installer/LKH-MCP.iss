@@ -44,10 +44,6 @@ Name: "{group}\Open LKH MCP Admin"; Filename: "http://127.0.0.1:8001/admin"
 Name: "{group}\Uninstall LKH MCP"; Filename: "{uninstallexe}"
 
 [Run]
-Filename: "{app}\LKH-MCP-Enroll\LKH-MCP-Enroll.exe"; Parameters: "--provision"; Flags: runhidden waituntilterminated
-Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File ""{app}\scripts\install-agent-task.ps1"" -InstallDir ""{app}"" -AgentUser ""{code:GetAgentUser}"" -ProjectAlias ""{code:GetProjectAlias}"" -Repository ""{code:GetRepository}"" -CheckoutPath ""{code:GetCheckoutPath}"""; Flags: runhidden waituntilterminated
-Filename: "{app}\LKH-MCP-Service\LKH-MCP-Service.exe"; Parameters: "--startup auto --username ""NT AUTHORITY\LocalService"" install"; Flags: runhidden waituntilterminated
-Filename: "{app}\LKH-MCP-Service\LKH-MCP-Service.exe"; Parameters: "start"; Flags: runhidden waituntilterminated
 Filename: "{app}\LKH-MCP-Tray\LKH-MCP-Tray.exe"; Description: "Start Pixel Pig tray"; Flags: nowait postinstall skipifsilent runasoriginaluser
 
 ; Native removal handled by checked [Code] hook; no unchecked automatic uninstall actions.
@@ -186,17 +182,16 @@ var
 begin
   Result := '"';
   for I := 1 to Length(Value) do
-    Result := Result + '\u' + IntToHex(Ord(Value[I]), 4);
+    Result := Result + '\u' + Format('%.4x', [Ord(Value[I])]);
   Result := Result + '"';
 end;
 
-procedure CurStepChanged(CurStep: TSetupStep);
+procedure InitializeAdministrator;
 var
   ExitCode, Attempts: Integer;
   Shell, Process: Variant;
   Command, Payload: String;
 begin
-  if CurStep <> ssPostInstall then Exit;
   if not Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
     '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' +
     ExpandConstant('{app}\scripts\native-installer-preflight.ps1') + '" -InstallDir "' +
@@ -230,6 +225,37 @@ begin
     { Never include a COM exception, process output or credential payload. }
     RaiseException('Administrator setup failed. Verify the account and password, then retry installation.');
   end;
+end;
+
+{ A nonzero child exit code must prevent the installation success page. }
+procedure RunRequired(Executable, Parameters, FailureMessage: String);
+var
+  ExitCode: Integer;
+begin
+  ExitCode := -1;
+  if not Exec(Executable, Parameters, '', SW_HIDE, ewWaitUntilTerminated, ExitCode) then
+    RaiseException(FailureMessage);
+  if ExitCode <> 0 then
+    RaiseException(FailureMessage + ' Exit code: ' + IntToStr(ExitCode));
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+begin
+  if CurStep <> ssPostInstall then Exit;
+  InitializeAdministrator;
+  RunRequired(ExpandConstant('{app}\LKH-MCP-Enroll\LKH-MCP-Enroll.exe'),
+    '--provision', 'Device enrollment failed.');
+  RunRequired(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
+    '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' +
+    ExpandConstant('{app}\scripts\install-agent-task.ps1') + '" -InstallDir "' +
+    ExpandConstant('{app}') + '" -AgentUser "' + GetAgentUser('') +
+    '" -ProjectAlias "' + GetProjectAlias('') + '" -Repository "' + GetRepository('') +
+    '" -CheckoutPath "' + GetCheckoutPath('') + '"', 'Agent task registration failed.');
+  RunRequired(ExpandConstant('{app}\LKH-MCP-Service\LKH-MCP-Service.exe'),
+    '--startup auto --username "NT AUTHORITY\LocalService" install',
+    'LKH MCP service registration failed.');
+  RunRequired(ExpandConstant('{app}\LKH-MCP-Service\LKH-MCP-Service.exe'),
+    '--wait 30 start', 'LKH MCP service startup failed.');
 end;
 
 { Uninstaller default: remove program and settings, preserve SQLite/WAL/logs/backups. }

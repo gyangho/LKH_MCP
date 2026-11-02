@@ -11,7 +11,6 @@ import os
 import secrets
 import subprocess
 import sys
-import time
 from pathlib import Path
 
 
@@ -22,7 +21,8 @@ def server_executable(service_executable: Path) -> Path:
     return exe
 
 
-def service_main() -> None:
+# pywin32 resolves this class by module/name even for frozen CLI commands.
+if os.name == "nt":
     import servicemanager
     import win32event
     import win32service
@@ -86,15 +86,20 @@ def service_main() -> None:
                         self.child.wait(timeout=10)
                     marker.unlink(missing_ok=True)
 
+
+def service_main() -> int:
+    if os.name != "nt":
+        raise RuntimeError("Windows Service only supported on Windows")
     if len(sys.argv) > 1:
-        win32serviceutil.HandleCommandLine(LkhMcpService)
+        return win32serviceutil.HandleCommandLine(LkhMcpService)
     else:
         servicemanager.Initialize()
         servicemanager.PrepareToHostSingle(LkhMcpService)
         servicemanager.StartServiceCtrlDispatcher()
+    return 0
 
 
 if __name__ == "__main__":
     if os.name != "nt":
         raise RuntimeError("Windows Service only supported on Windows")
-    service_main()
+    raise SystemExit(service_main())

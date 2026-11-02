@@ -86,7 +86,49 @@ class TrayShutdownTests(unittest.TestCase):
             win.user32.MessageBoxW.return_value = 7  # No
             self.assertFalse(tray._confirm_shutdown("server"))
             self.assertIn("\n", win.user32.MessageBoxW.call_args.args[1])
+            self.assertIn("상태를 확인할 수 없으면", win.user32.MessageBoxW.call_args.args[1])
+            self.assertNotIn("작업이 실행 중이면 중단", win.user32.MessageBoxW.call_args.args[1])
             self.assertEqual(win.user32.MessageBoxW.call_args.args[3] & 0x100, 0x100)
+
+    def test_connection_refused_shows_persistent_reason_without_stop(self):
+        with patch.object(tray.urllib.request, "urlopen", side_effect=OSError("refused")), \
+             patch.object(tray, "_request_scm_stop") as stop, \
+             patch.object(tray, "control_agent") as agent, \
+             patch("ctypes.windll", create=True) as win:
+            tray._shutdown_with_feedback("both")
+        stop.assert_not_called()
+        agent.assert_not_called()
+        dialog = win.user32.MessageBoxW.call_args
+        self.assertIn("로컬 서버", dialog.args[1])
+        self.assertIn("설치·실행 상태", dialog.args[1])
+        self.assertNotIn("UAC", dialog.args[1])
+        self.assertEqual(dialog.args[2], "LKH MCP 종료 실패")
+
+    def test_busy_and_unknown_busy_have_distinct_feedback(self):
+        for busy, reason in ((True, "실행 중"), (None, "작업 상태를 확인할 수 없어")):
+            with self.subTest(busy=busy), \
+                 patch.object(tray, "_read_state", return_value={"state": "online", "busy": busy}), \
+                 patch.object(tray, "_show_shutdown_result") as show, \
+                 patch.object(tray, "_request_scm_stop") as stop:
+                tray._shutdown_with_feedback("both")
+                self.assertIn(reason, show.call_args.args[0])
+                self.assertTrue(show.call_args.kwargs["failed"])
+                stop.assert_not_called()
+
+    def test_unexpected_failure_is_visible_and_redacted(self):
+        with patch.object(tray, "shutdown_from_tray", side_effect=Exception("sensitive details")), \
+             patch.object(tray, "_show_shutdown_result") as show:
+            tray._shutdown_with_feedback("both")
+        self.assertTrue(show.call_args.kwargs["failed"])
+        self.assertNotIn("sensitive details", show.call_args.args[0])
+
+    def test_launch_acknowledgement_does_not_claim_stopped(self):
+        with patch.object(tray, "shutdown_from_tray"), \
+             patch.object(tray, "_show_shutdown_result") as show:
+            tray._shutdown_with_feedback("both")
+        self.assertFalse(show.call_args.kwargs["failed"])
+        self.assertIn("실제로 중지되었는지", show.call_args.args[0])
+        self.assertIn("트레이 아이콘은 계속", show.call_args.args[0])
 
     def test_frozen_service_path_is_fixed_to_adjacent_package(self):
         with patch.object(tray.sys, "frozen", True, create=True), \
