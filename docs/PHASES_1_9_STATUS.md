@@ -69,3 +69,5 @@ are deferred until the user can grant a test/deployment window. Do not mark Phas
 - Native uninstall implementation staging: 3 modes (default settings reset but SQLite/WAL retained), exact task/SCM ownership checks, busy/reparse fail closed, verified separate SQLite backup for full deletion, and explicit re-enrollment marker for preserved DB. CI and isolated Windows uninstall/reinstall E2E pending.
 
 - Pig tray right-click context menu label simplified to one **종료** action (Agent + server), with no separate tray-only exit. The previous server-only API remains available from the authenticated Admin UI; tray does not bypass CSRF.
+
+- Native tray silent-stop repair (2026-11-02): `CoInitialize`/`CoUninitialize` on worker scheduler COM calls, foreground shutdown error dialog, confirmed Agent task stop and Windows SCM `STOPPED` before tray closes. Windows real-host UAC/SCM E2E remains unverified; CI/mocks cover failure paths.

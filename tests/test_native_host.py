@@ -3,6 +3,9 @@ import unittest
 from unittest.mock import patch, MagicMock
 import json
 import io
+import sys
+import threading
+from types import ModuleType
 
 import native_task_control as task
 import native_tray as tray
@@ -10,6 +13,40 @@ from native_host_routes import compute_tray_state
 
 
 class TaskTests(unittest.TestCase):
+    def test_com_initialized_and_balanced_on_worker_thread(self):
+        package, client, com = (ModuleType(name) for name in
+                                ("win32com", "win32com.client", "pythoncom"))
+        package.client = client
+        com.CoInitialize = MagicMock()
+        com.CoUninitialize = MagicMock()
+        scheduler = MagicMock()
+        scheduler.GetFolder.return_value.GetTask.return_value.State = 3
+        client.Dispatch = MagicMock(return_value=scheduler)
+        outputs = []
+        with patch.object(task, "_windows_only"), patch.dict(
+                sys.modules, {"win32com": package, "win32com.client": client,
+                              "pythoncom": com}):
+            worker = threading.Thread(target=lambda: outputs.append(task.task_state()))
+            worker.start()
+            worker.join(timeout=3)
+        self.assertFalse(worker.is_alive())
+        self.assertEqual(outputs, ["ready"])
+        com.CoInitialize.assert_called_once_with()
+        com.CoUninitialize.assert_called_once_with()
+
+    def test_com_scheduler_error_releases_apartment(self):
+        package, client, com = (ModuleType(name) for name in
+                                ("win32com", "win32com.client", "pythoncom"))
+        package.client = client
+        com.CoInitialize = MagicMock()
+        com.CoUninitialize = MagicMock()
+        client.Dispatch = MagicMock(side_effect=RuntimeError("unavailable"))
+        with patch.object(task, "_windows_only"), patch.dict(
+                sys.modules, {"win32com": package, "win32com.client": client,
+                              "pythoncom": com}):
+            self.assertEqual(task.task_state(), "unavailable")
+        com.CoUninitialize.assert_called_once_with()
+
     def test_fixed_task_name_and_no_shell(self):
         with patch.object(task, "_windows_only"), patch.object(
             task.subprocess, "run", return_value=MagicMock(returncode=0)
