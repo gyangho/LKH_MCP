@@ -119,3 +119,14 @@ These code deliverables are checkpoints, not user authorization to deploy.
 - I7 staging now verifies `PRAGMA integrity_check`, row counts, and the **logical SHA-256 of schema/data**. A backup destination is created with same-directory atomic no-replace hard-link, preventing an intervening process from having its file overwritten. Concurrent source modification fails closed on digest mismatch. An approved, consistent Docker export is still required.
 - GitHub-hosted Windows Runner ≠ the target PC. A signed Installer, Oracle Thick/UI UX frozen feature parity, login/logout/reboot, Windows accounts/ACL on the corporate host, silent upgrade/uninstall, and actual Naru/Cloudflare cutover and rollback are **NOT VERIFIED**. The code remains staging-only; no production transition was performed.
 
+
+
+## Native same-PC Naru replacement / Pixel Pig UI update (2026-11-02)
+
+- Native loopback defaults: MCP `127.0.0.1:8000/mcp`, Admin `127.0.0.1:8001/admin`. They **reuse the existing Cloudflare destination ports only after Naru/old Docker port listeners are stopped**. Both route guards remain separate; never bind the combined app on `0.0.0.0`.
+- Existing Naru container/port proxy may still own the sockets; Native must fail the bind in that case. This software does **not** stop Naru, edit Cloudflare, remove data, or change Windows firewall rules.
+- Installer initializes `ADMIN_PUBLIC_ORIGIN=http://127.0.0.1:8001` for **local** administration. Remote administration under a Cloudflare hostname requires a separately reviewed origin/host/cookie/Access policy; MCP 8000 alone may be routed through Cloudflare. Do not expose 8001 without that review.
+- Pixel Pig icon: `branding/pig-terminal.png` stays full color when the server responds and Agent has a fresh authenticated heartbeat. Server online + Agent offline → true monochrome; server unavailable → dim gray. Color no longer indicates Agent busy state.
+- Web admin: original Pig artwork, shared rectangular pixel-theme fields and text area, fixed form/layout alignment. Operations logs/metrics/alerts have **no automatic polling** while being reviewed; explicit manual refresh buttons and fixed-height scroll table. Global status refresh is suspended while editing instructions or reading operations.
+- Shutdown UI: session + Origin/Host/CSRF-protected Native-only `POST /admin/api/host/shutdown/{server,both}` with exact confirmation body, active-job refusal, 5-second rate limit. `both` stops the fixed Agent task first; the Native server returns acknowledgement, then drains gateways and exits. Windows SCM supervisor treats zero-exit as a deliberate stop. This does not shut down Naru or unrelated services.
+- New staging CI tests verify port isolation, shutdown conditions, and Pig palette. Signed Installer, real Cloudflare/WARP routing and corporate Windows Agent/SCM shutdown remain host-specific acceptance tests.

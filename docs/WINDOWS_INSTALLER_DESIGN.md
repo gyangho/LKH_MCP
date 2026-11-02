@@ -69,7 +69,7 @@ $env:LKH_NATIVE_STATE_DIR = Join-Path $env:TEMP "lkh-mcp-native-staging"
 .\dist\LKH-MCP-Server\LKH-MCP-Server.exe
 ```
 
-Default bind is `127.0.0.1:18080` and **live 8000/8001 ports are rejected in preview**. Do not set `MCP_HOST=0.0.0.0`; the runtime rejects non-loopback. Server state is separate in `%ProgramData%\LKH-MCP\data` unless `LKH_NATIVE_STATE_DIR` specifies an absolute staging directory. `MCP_DB_PATH` and `MCP_BOOTSTRAP_FILE` can be explicit absolute paths, but avoid pointing at operational data. If no bootstrap is configured, admin remains unconfigured; the preview **does not create or retrieve administrator secrets**.
+Default bind is `127.0.0.1:8000` for MCP and `127.0.0.1:8001` for Admin after the old Naru listeners are stopped. Do not set `MCP_HOST=0.0.0.0`; the runtime rejects non-loopback. Server state is separate in `%ProgramData%\LKH-MCP\data` unless `LKH_NATIVE_STATE_DIR` specifies an absolute staging directory. `MCP_DB_PATH` and `MCP_BOOTSTRAP_FILE` can be explicit absolute paths, but avoid pointing at operational data. If no bootstrap is configured, admin remains unconfigured; the preview **does not create or retrieve administrator secrets**.
 
 The check command validates packaged React `web/dist/index.html` and vendor UI/UX script, **not** actual authentication/Oracle/Cloudflare or Windows service startup. Existing `src/uiux_tools.py` requires an externally installed Python interpreter via `UIUX_PYTHON_EXECUTABLE` when frozen; parity remains blocked until a future audited solution. Oracle 11g needs compatible local Instant Client/Thick mode and real tests. Keep Docker gateway running.
 
@@ -85,3 +85,14 @@ Windows CI builds this unsigned preview and smoke-tests asset inclusion/loopback
 - I7 `src/native_migration.py`: 기존 SQLite를 읽기 전용으로 열어 새로운 staging DB에 Backup API 복사, integrity/테이블 건수 비교, 기존 파일 덮어쓰기 거부. Docker 원본 DB 수출과 라우팅 전환은 수행하지 않음.
 
 현재 모든 설치·제거 명령은 실제 Windows 서비스/파일/ACL을 변경한다. **CI의 Installer compile과 실제 설치는 다르며, 사용자 승인 없이 운영 PC에 설치하지 않는다.**
+
+
+## Native same-PC Naru replacement / Pixel Pig UI update (2026-11-02)
+
+- Native loopback defaults: MCP `127.0.0.1:8000/mcp`, Admin `127.0.0.1:8001/admin`. They **reuse the existing Cloudflare destination ports only after Naru/old Docker port listeners are stopped**. Both route guards remain separate; never bind the combined app on `0.0.0.0`.
+- Existing Naru container/port proxy may still own the sockets; Native must fail the bind in that case. This software does **not** stop Naru, edit Cloudflare, remove data, or change Windows firewall rules.
+- Installer initializes `ADMIN_PUBLIC_ORIGIN=http://127.0.0.1:8001` for **local** administration. Remote administration under a Cloudflare hostname requires a separately reviewed origin/host/cookie/Access policy; MCP 8000 alone may be routed through Cloudflare. Do not expose 8001 without that review.
+- Pixel Pig icon: `branding/pig-terminal.png` stays full color when the server responds and Agent has a fresh authenticated heartbeat. Server online + Agent offline → true monochrome; server unavailable → dim gray. Color no longer indicates Agent busy state.
+- Web admin: original Pig artwork, shared rectangular pixel-theme fields and text area, fixed form/layout alignment. Operations logs/metrics/alerts have **no automatic polling** while being reviewed; explicit manual refresh buttons and fixed-height scroll table. Global status refresh is suspended while editing instructions or reading operations.
+- Shutdown UI: session + Origin/Host/CSRF-protected Native-only `POST /admin/api/host/shutdown/{server,both}` with exact confirmation body, active-job refusal, 5-second rate limit. `both` stops the fixed Agent task first; the Native server returns acknowledgement, then drains gateways and exits. Windows SCM supervisor treats zero-exit as a deliberate stop. This does not shut down Naru or unrelated services.
+- New staging CI tests verify port isolation, shutdown conditions, and Pig palette. Signed Installer, real Cloudflare/WARP routing and corporate Windows Agent/SCM shutdown remain host-specific acceptance tests.

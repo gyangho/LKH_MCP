@@ -6,8 +6,10 @@ from pathlib import Path
 from unittest.mock import patch
 
 import native_shutdown
-from scripts.generate_icon import generate
-from PIL import Image
+try:
+    from PIL import Image
+except ImportError:
+    Image = None
 
 
 class NativeShutdownTests(unittest.IsolatedAsyncioTestCase):
@@ -25,8 +27,10 @@ class NativeShutdownTests(unittest.IsolatedAsyncioTestCase):
                 native_shutdown.schedule_shutdown()
 
 
+@unittest.skipUnless(Image is not None, "Pillow is a Windows packaging dependency")
 class PixelPigTests(unittest.TestCase):
     def test_original_color_and_true_gray_server_only_state(self):
+        from scripts.generate_icon import generate
         with tempfile.TemporaryDirectory() as td:
             generate(Path(td))
             with (Image.open(Path(td) / "pig-online.png") as online,

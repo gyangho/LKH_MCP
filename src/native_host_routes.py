@@ -93,7 +93,11 @@ def register_native_host_routes(mcp):
                 if any(a.get("busy") for a in snapshot["agents"]):
                     return _private(JSONResponse({"error": "active Codex task; cancel first"}, status_code=409))
                 if target == "both":
-                    control_agent("stop", busy=False)
+                    agent_state = task_state()
+                    if agent_state == "running":
+                        control_agent("stop", busy=False)
+                    elif agent_state not in ("ready", "disabled"):
+                        raise RuntimeError("Agent task state must be known before combined shutdown")
                 schedule_shutdown()
             except (PermissionError, OSError, RuntimeError, ValueError):
                 return _private(JSONResponse({"error": "native shutdown unavailable or Agent task denied"}, status_code=503))
