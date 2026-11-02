@@ -184,7 +184,7 @@ def run_tray() -> None:
                 icon.title = "LKH MCP " + VERSION + " - " + label[current]
                 previous = current
 
-     icon.menu = pystray.Menu(
+    icon.menu = pystray.Menu(
         Item("관리자 페이지 열기", open_admin, default=True),
         pystray.Menu.SEPARATOR,
         Item("Agent 시작", lambda i, t: do_action("start")),
