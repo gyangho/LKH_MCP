@@ -16,6 +16,9 @@ jobs:
       - name: Build admin UI
         working-directory: frontend
         run: npm install --no-audit --no-fund && npm run build
+      - name: Verify legacy Docker UI build includes Pixel Pig art
+        run: docker build --target ui_build -t lkh-mcp-pixel-pig-ui-ci -f Dockerfile .
+
   python:
     runs-on: ubuntu-latest
     permissions:
