@@ -1,6 +1,8 @@
 """Native tray shutdown regression. No actual Windows SCM, UAC or Task is touched."""
 import unittest
 from pathlib import Path
+import sys
+from types import SimpleNamespace
 from unittest.mock import patch, MagicMock
 
 import native_tray as tray
@@ -12,9 +14,11 @@ class TrayShutdownTests(unittest.TestCase):
         with patch.object(tray, "_read_state", return_value={"state": "offline", "busy": False}), \
              patch.object(tray, "_installed_service_binary", return_value=binary), \
              patch.object(tray, "_request_scm_stop") as stop, \
+             patch.object(tray, "_wait_for_service_stop") as waited, \
              patch.object(tray, "control_agent") as agent:
             tray.shutdown_from_tray("server")
         stop.assert_called_once_with(binary)
+        waited.assert_called_once_with()
         agent.assert_not_called()
 
     def test_both_stops_only_registered_agent_before_service(self):
@@ -24,10 +28,13 @@ class TrayShutdownTests(unittest.TestCase):
              patch.object(tray, "_installed_service_binary", return_value=binary), \
              patch.object(tray, "task_state", return_value="running"), \
              patch.object(tray, "control_agent", side_effect=lambda *args, **kw: order.append(("agent", args, kw))), \
-             patch.object(tray, "_request_scm_stop", side_effect=lambda *args: order.append(("server", args))):
+             patch.object(tray, "_wait_for_agent_stop", side_effect=lambda: order.append(("agent_confirmed",))), \
+             patch.object(tray, "_request_scm_stop", side_effect=lambda *args: order.append(("server", args))), \
+             patch.object(tray, "_wait_for_service_stop", side_effect=lambda: order.append(("server_confirmed",))):
             tray.shutdown_from_tray("both")
         self.assertEqual(order, [("agent", ("stop",), {"busy": False}),
-                                 ("server", (binary,))])
+                                 ("agent_confirmed",), ("server", (binary,)),
+                                 ("server_confirmed",)])
 
     def test_unknown_busy_or_missing_state_never_stops(self):
         for state in ({"state": "unknown", "busy": False},
@@ -67,6 +74,53 @@ class TrayShutdownTests(unittest.TestCase):
         self.assertNotIn('Item("트레이', source)
         self.assertNotIn('Item("MCP 서버 종료', source)
         self.assertNotIn('Item("서버 + Agent 모두 종료', source)
+
+    def test_agent_stop_waits_for_ready_and_refuses_unknown(self):
+        with patch.object(tray, "task_state", side_effect=["running", "ready"]), \
+             patch.object(tray.time, "sleep") as sleeper:
+            tray._wait_for_agent_stop()
+        sleeper.assert_called_once()
+        with patch.object(tray, "task_state", return_value="unavailable"):
+            with self.assertRaises(RuntimeError):
+                tray._wait_for_agent_stop()
+
+    def test_service_stop_requires_scm_stopped_and_closes_handles(self):
+        manager, service, closed = object(), object(), []
+        scm = SimpleNamespace(
+            SC_MANAGER_CONNECT=1, SERVICE_QUERY_STATUS=4, SERVICE_STOPPED=1,
+            OpenSCManager=lambda *args: manager,
+            OpenService=lambda *args: service,
+            QueryServiceStatus=MagicMock(side_effect=[(0, 3), (0, 1)]),
+            CloseServiceHandle=lambda handle: closed.append(handle),
+        )
+        with patch.dict(sys.modules, {"win32service": scm}), \
+             patch.object(tray.time, "sleep") as sleeper:
+            tray._wait_for_service_stop()
+        self.assertEqual(scm.QueryServiceStatus.call_count, 2)
+        self.assertEqual(closed, [service, manager])
+        sleeper.assert_called_once()
+
+    def test_service_wait_timeout_still_closes_handles(self):
+        manager, service, closed = object(), object(), []
+        scm = SimpleNamespace(
+            SC_MANAGER_CONNECT=1, SERVICE_QUERY_STATUS=4, SERVICE_STOPPED=1,
+            OpenSCManager=lambda *args: manager,
+            OpenService=lambda *args: service,
+            QueryServiceStatus=lambda *args: (0, 3),
+            CloseServiceHandle=lambda handle: closed.append(handle),
+        )
+        with patch.dict(sys.modules, {"win32service": scm}), \
+             patch.object(tray.time, "monotonic", side_effect=[0, 31]):
+            with self.assertRaises(TimeoutError):
+                tray._wait_for_service_stop(timeout=30)
+        self.assertEqual(closed, [service, manager])
+
+    def test_error_dialog_is_topmost_for_hidden_notification_failure(self):
+        with patch("ctypes.windll", create=True) as win:
+            tray._show_shutdown_result("Agent 작업 상태 확인 실패", failed=True)
+        messagebox = win.user32.MessageBoxW.call_args.args
+        self.assertIn("Agent 작업 상태 확인 실패", messagebox[1])
+        self.assertTrue(messagebox[3] & 0x40000)
 
     def test_arbitrary_shutdown_target_is_not_supported(self):
         with self.assertRaises(ValueError):
@@ -122,13 +176,11 @@ class TrayShutdownTests(unittest.TestCase):
         self.assertTrue(show.call_args.kwargs["failed"])
         self.assertNotIn("sensitive details", show.call_args.args[0])
 
-    def test_launch_acknowledgement_does_not_claim_stopped(self):
+    def test_verified_shutdown_allows_tray_to_close(self):
         with patch.object(tray, "shutdown_from_tray"), \
              patch.object(tray, "_show_shutdown_result") as show:
-            tray._shutdown_with_feedback("both")
-        self.assertFalse(show.call_args.kwargs["failed"])
-        self.assertIn("실제로 중지되었는지", show.call_args.args[0])
-        self.assertIn("트레이 아이콘은 계속", show.call_args.args[0])
+            self.assertTrue(tray._shutdown_with_feedback("both"))
+        show.assert_not_called()
 
     def test_frozen_service_path_is_fixed_to_adjacent_package(self):
         with patch.object(tray.sys, "frozen", True, create=True), \

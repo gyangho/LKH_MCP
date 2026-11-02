@@ -8,7 +8,17 @@ class UninstallerContractTests(unittest.TestCase):
     def test_three_modes_and_default_sqlite_preservation(self):
         source = (ROOT / "installer/LKH-MCP.iss").read_text("utf-8")
         self.assertIn("RemovalMode := 'settings'", source)
-        self.assertIn("RemovalMode := 'program'", source)
+        self.assertIn("SelectUninstallMode()", source)
+        self.assertIn("FullRemoval.Checked := False", source)
+        self.assertIn("if FullRemoval.Checked then", source)
+        self.assertIn("CreateCustomForm(460, 184, False, False)", source)
+        self.assertNotIn("Form.ClientWidth :=", source)
+        self.assertNotIn("Form.ClientHeight :=", source)
+        self.assertIn("Form.ShowModal", source)
+        self.assertNotIn("RemovalMode := 'program'", source)
+        self.assertNotIn("MB_YESNOCANCEL", source)
+        self.assertIn("MB_OKCANCEL or MB_DEFBUTTON2", source)
+        # Existing program mode stays in fixed cleanup script, not the UI selector.
         self.assertIn("RemovalMode := 'all'", source)
         self.assertIn("RunNativeRemoval('verify')", source)
         self.assertIn("RunNativeRemoval('remove')", source)

@@ -10,6 +10,7 @@ import json
 import os
 import sys
 import threading
+import time
 import urllib.request
 import webbrowser
 from pathlib import Path
@@ -85,6 +86,45 @@ class ShutdownBlocked(PermissionError):
 class ShutdownFailure(RuntimeError):
     """Safe, user-facing failure after shutdown checks."""
 
+def _wait_for_agent_stop(*, timeout: float = 15.0) -> None:
+    """The scheduler accepting /end does not prove the Agent stopped."""
+    deadline = time.monotonic() + timeout
+    while True:
+        state = task_state()
+        if state in ("ready", "disabled"):
+            return
+        if state not in ("running", "queued"):
+            raise RuntimeError("Agent 작업 상태를 확인할 수 없어 종료를 중단했습니다.")
+        if time.monotonic() >= deadline:
+            raise TimeoutError("Agent 작업이 제한 시간 내 중지되지 않았습니다.")
+        time.sleep(0.3)
+
+
+def _wait_for_service_stop(*, timeout: float = 30.0) -> None:
+    """Only a verified STOPPED SCM state counts as successful shutdown."""
+    import win32service
+
+    manager = win32service.OpenSCManager(
+        None, None, win32service.SC_MANAGER_CONNECT)
+    try:
+        service = win32service.OpenService(
+            manager, "LKH-MCP-Server", win32service.SERVICE_QUERY_STATUS)
+        try:
+            deadline = time.monotonic() + timeout
+            while True:
+                current = win32service.QueryServiceStatus(service)[1]
+                if current == win32service.SERVICE_STOPPED:
+                    return
+                if time.monotonic() >= deadline:
+                    raise TimeoutError("MCP 서비스가 제한 시간 내 중지되지 않았습니다.")
+                time.sleep(0.4)
+        finally:
+            win32service.CloseServiceHandle(service)
+    finally:
+        win32service.CloseServiceHandle(manager)
+
+
+
 
 def shutdown_from_tray(target: str) -> None:
     """Safely request shutdown using Windows SCM privileges and Task Scheduler ACLs.
@@ -120,6 +160,7 @@ def shutdown_from_tray(target: str) -> None:
         if scheduler == "running":
             try:
                 control_agent("stop", busy=False)
+                _wait_for_agent_stop()
             except Exception as exc:
                 raise ShutdownFailure("Agent 중지에 실패해 서버 종료를 요청하지 않았습니다.\n"
                                       "작업 스케줄러의 LKH-Codex-Agent 상태와 권한을 확인하세요.") from exc
@@ -128,6 +169,10 @@ def shutdown_from_tray(target: str) -> None:
     except (OSError, RuntimeError) as exc:
         raise ShutdownFailure("Windows 서비스 종료 프로그램을 실행하지 못했습니다.\n"
                               "UAC 승인이 취소되었거나 실행 권한이 없을 수 있습니다. 다시 시도하세요.") from exc
+    try:
+        _wait_for_service_stop()
+    except Exception as exc:
+        raise ShutdownFailure("서비스 중지를 확인하지 못했습니다. Windows 서비스 상태와 권한을 확인하세요.") from exc
 
 
 def _confirm_shutdown(target: str) -> bool:
@@ -147,10 +192,10 @@ def _show_shutdown_result(message: str, *, failed: bool) -> None:
     # A modal result stays visible even when Windows tray notifications are disabled.
     ctypes.windll.user32.MessageBoxW(
         None, message, "LKH MCP 종료 실패" if failed else "LKH MCP 종료 요청",
-        0x10 if failed else 0x40)
+        (0x10 if failed else 0x40) | 0x10000 | 0x40000)
 
 
-def _shutdown_with_feedback(target: str) -> None:
+def _shutdown_with_feedback(target: str) -> bool:
     try:
         shutdown_from_tray(target)
     except (ShutdownBlocked, ShutdownFailure) as exc:
@@ -160,9 +205,8 @@ def _shutdown_with_feedback(target: str) -> None:
         _show_shutdown_result("종료 처리 중 오류가 발생했습니다. Windows 서비스와 Agent 상태를 확인하세요.",
                               failed=True)
     else:
-        _show_shutdown_result("Windows에 서비스 종료 프로그램 실행을 요청했습니다.\n"
-                              "서비스가 실제로 중지되었는지 Windows 서비스에서 확인하세요.\n"
-                              "트레이 아이콘은 계속 표시됩니다.", failed=False)
+        return True  # SCM STOPPED was observed; the caller may close the tray.
+    return False
 
 
 def run_tray() -> None:
@@ -214,7 +258,11 @@ def run_tray() -> None:
 
             def perform():
                 try:
-                    _shutdown_with_feedback(target)
+                    if _shutdown_with_feedback(target):
+                        done.set()
+                        icon.stop()
+                except Exception:
+                    notice("종료 처리 실패: 서비스와 트레이 상태를 확인하세요.")
                 finally:
                     shutdown_lock.release()
             threading.Thread(target=perform, daemon=True, name="LKH-Tray-Stop").start()

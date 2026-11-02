@@ -17,17 +17,24 @@ def _windows_only() -> None:
 
 
 def task_state() -> str:
-    """COM numeric state: 1 Disabled, 2 Queued, 3 Ready, 4 Running."""
+    """Query the fixed Agent task. COM initialization must be per-calling-thread."""
     _windows_only()
-    import win32com.client
-    scheduler = win32com.client.Dispatch("Schedule.Service")
-    scheduler.Connect()
     try:
+        import pythoncom
+        import win32com.client
+        pythoncom.CoInitialize()
+    except Exception:
+        return "unavailable"
+    try:
+        scheduler = win32com.client.Dispatch("Schedule.Service")
+        scheduler.Connect()
         task = scheduler.GetFolder("\\").GetTask("LKH-Codex-Agent")
         return {1: "disabled", 2: "queued", 3: "ready", 4: "running"}.get(
             int(task.State), "unknown")
     except Exception:
         return "unavailable"
+    finally:
+        pythoncom.CoUninitialize()
 
 
 def control_agent(action: str, *, busy: bool = False) -> dict:
