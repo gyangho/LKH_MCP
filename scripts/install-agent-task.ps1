@@ -37,7 +37,7 @@ $sid = $account.Translate([System.Security.Principal.SecurityIdentifier]).Value
 
 if (-not (Test-Path -LiteralPath $config -PathType Leaf) -and $checkout -ne "") {
     $payload = @{
-        server_url = "http://127.0.0.1:18081"
+        server_url = "http://127.0.0.1:8001"
         agent_id = "win-" + ([guid]::NewGuid().ToString("N").Substring(0, 12))
         poll_interval_seconds = 10
         projects = @{ $ProjectAlias = @{ repository = $Repository; path = $checkout } }

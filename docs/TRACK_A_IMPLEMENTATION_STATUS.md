@@ -10,7 +10,7 @@ enrollment and SQLite migration are **not production released**.
 | Stage | Files / concrete implementation | Remaining acceptance |
 |---|---|---|
 | I0 | `TRACK_A_I0_BASELINE.md`: Naru/Docker, SQLite WAL, Oracle Thick, Cloudflare/WARP/portproxy, Agent and UIUX inventory | Host/network/Oracle evidence; I0 not fully VERIFIED |
-| I1 | `native_runtime.py`, `native_server.py`, `native_gateway.py`; 127.0.0.1:18080 MCP-only, :18081 Admin-only, route guards; PyInstaller onedir bundle | Windows CLI smoke and 404 route checks; Oracle 11g, UIUX frozen parity and real host still pending |
+| I1 | `native_runtime.py`, `native_server.py`, `native_gateway.py`; 기본 127.0.0.1:8000 MCP-only, :8001 Admin-only (병행 staging은 18080/18081 명시 오버라이드), route guards; PyInstaller onedir bundle | Windows CLI smoke and 404 route checks; Oracle 11g, UIUX frozen parity and real host still pending |
 | I2 | `native_service.py`: distinct SCM host process, child server lifecycle, service stop signal. Installed as `LKH-MCP-Server` under LocalService by Installer | Service install/start/reboot/logoff/recovery/ACL under actual Windows account |
 | I3 | `native_task_control.py`, `native_host_routes.py`, `scripts/install-agent-task.ps1`; fixed task only, authenticated CSRF API, busy guard | Real LocalService task SDDL, Windows Agent repo config, interactive login, restart/stop E2E |
 | I4 | `native_tray.py`, `scripts/generate_icon.py`: same approved Pixel Pig pixels recolored green/pink/gray, separate tray, start/stop via fixed task | Pixel legibility at 16px, notification UI, tray autostart, offline/unknown behavior on host |
@@ -29,7 +29,7 @@ git submodule update --init --recursive
 # Native preview preflight; NO service installation
 .\dist\LKH-MCP-Server\LKH-MCP-Server.exe --check
 
-# Local-only staging DB and both strictly filtered ports
+# Local-only staging DB and separate test ports to avoid existing Naru 8000/8001
 $env:LKH_NATIVE_STATE_DIR = Join-Path $env:TEMP "lkh-native-sandbox"
 $env:MCP_HOST = "127.0.0.1"
 $env:MCP_PORT = "18080"
@@ -40,7 +40,7 @@ $env:LKH_NATIVE_ADMIN_PORT = "18081"
 The staging Native preview is NOT the production Naru MCP. Port 18080
 accepts `/mcp` and `/mcp/` only; 18081 accepts `/admin` + subpaths
 only and exposes `/admin/healthz` for non-sensitive loopback liveness.
-Do not configure Cloudflare to point to the preview.
+Do not configure Cloudflare to point to the preview. Native production-target defaults are 8000/8001, but this sample intentionally overrides them to 18080/18081 to avoid conflict with an existing Naru listener. The Installer's new Agent config targets Admin 8001; existing Agent config is preserved and requires an explicit reviewed migration if still pointing to 18081.
 
 To compile the **unsigned** staging Installer:
 `& "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\LKH-MCP.iss`.

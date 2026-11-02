@@ -78,6 +78,13 @@ class NativeRuntimeTests(unittest.TestCase):
         self.assertEqual(env["MCP_PORT"], "8000")
         self.assertEqual(env["LKH_NATIVE_ADMIN_PORT"], "8001")
 
+    def test_installer_generated_agent_url_matches_native_admin_port(self):
+        # Guard the Windows Installer bootstrap contract on every Python CI run.
+        script = (Path(__file__).resolve().parents[1] /
+                  "scripts" / "install-agent-task.ps1").read_text(encoding="utf-8")
+        self.assertIn('server_url = "http://127.0.0.1:8001"', script)
+        self.assertNotIn("127.0.0.1:18081", script)
+
     def test_asset_checks_are_explicit(self):
         self.assertEqual(native_runtime.required_assets(self.root),
                          {"admin_html": False, "uiux_search": False})
