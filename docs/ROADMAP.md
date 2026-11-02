@@ -12,6 +12,7 @@
 4. Installer에서 신뢰 관계 최초 등록, OS 보호 자격증명 기반으로 Agent가 서버에 자동 인증·단기 토큰 수신·갱신. 서버에서 토큰 재발급해도 Windows PowerShell/파일 수동 수정 불필요. **무인증 토큰 발급 API 불가**.
 5. 기존 MCP API/Oracle/관리자/권한/Graphify/작업 큐와 Codex CLI 이벤트 기반 콘솔·지침 관리·감사/로그/메트릭·Skill 검증.
 6. 실제 Docker, Naru, Cloudflare private WARP 경계 및 SQLite 데이터는 Native 동등성/백업/롤백 검증과 별도 cutover 승인 전 유지.
+7. Native Pig 트레이에는 서버 종료 및 서버+Agent 동시 종료 메뉴를 제공하되, Windows SCM/UAC 확인과 활성 작업 차단을 적용한다. 사용자 환경의 UAC/서비스 실제 종료는 별도 E2E 검증이 필요하다.
 
 ## 기준선 (2026-10-30)
 

@@ -101,8 +101,8 @@ def shutdown_from_tray(target: str) -> None:
 def _confirm_shutdown(target: str) -> bool:
     import ctypes
     name = "MCP 서버와 Agent" if target == "both" else "MCP 서버"
-    message = (name + "를 종료하시겠습니까?\\n"
-               "현재 작업이 실행 중이면 중단되며, Windows 관리자(UAC) 승인이 필요합니다.\\n"
+    message = (name + "를 종료하시겠습니까?\n"
+               "현재 작업이 실행 중이면 중단되며, Windows 관리자(UAC) 승인이 필요합니다.\n"
                "취소하면 종료하지 않습니다.")
     # MB_YESNO | MB_ICONWARNING | MB_DEFBUTTON2 (No)
     return ctypes.windll.user32.MessageBoxW(None, message, "LKH MCP 종료 확인",

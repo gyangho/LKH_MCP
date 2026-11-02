@@ -74,6 +74,13 @@ class TrayShutdownTests(unittest.TestCase):
             self.assertEqual(tray.status(), "online")
             self.assertIsNone(tray._read_state()["busy"])
 
+    def test_confirmation_defaults_to_no_and_uses_real_line_breaks(self):
+        with patch("ctypes.windll", create=True) as win:
+            win.user32.MessageBoxW.return_value = 7  # No
+            self.assertFalse(tray._confirm_shutdown("server"))
+            self.assertIn("\\n", win.user32.MessageBoxW.call_args.args[1])
+            self.assertEqual(win.user32.MessageBoxW.call_args.args[3] & 0x100, 0x100)
+
     def test_frozen_service_path_is_fixed_to_adjacent_package(self):
         with patch.object(tray.sys, "frozen", True, create=True), \
              patch.object(tray.sys, "executable", "C:/LKH/LKH-MCP-Tray/LKH-MCP-Tray.exe"), \
