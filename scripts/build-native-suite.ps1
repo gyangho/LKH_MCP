@@ -27,8 +27,10 @@ try {
     & $Python -m PyInstaller @base --console --name LKH-MCP-Admin-Setup `
         scripts/native-admin-setup.py
     if ($LASTEXITCODE -ne 0) { throw "Admin bootstrap build failed" }
+    & $Python -m PyInstaller @base --console --name LKH-MCP-DB-Backup src/native_uninstall_backup.py
+    if ($LASTEXITCODE -ne 0) { throw "SQLite recovery helper build failed" }
     foreach ($name in @("LKH-MCP-Admin-Setup", "LKH-MCP-Server", "LKH-MCP-Service", "LKH-MCP-Tray",
-                         "LKH-Codex-Agent", "LKH-MCP-Enroll")) {
+                         "LKH-Codex-Agent", "LKH-MCP-Enroll", "LKH-MCP-DB-Backup")) {
         if (-not (Test-Path "dist\$name\$name.exe")) {
             throw "Missing unsigned bundle: $name"
         }

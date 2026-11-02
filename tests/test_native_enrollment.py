@@ -66,6 +66,20 @@ class EnrollmentTests(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             enrollment.provision(self.root)
 
+    def test_explicit_uninstall_settings_reset_can_re_enroll_with_preserved_db(self):
+        enrollment.provision(self.root)
+        secret = enrollment.read_device_secret(self.root)
+        old_token = enrollment.issue_session(secret, self.root)["access_token"]
+        config = self.root / "config"
+        (config / "agent-credential.bin").unlink()
+        marker = self.root / "data" / ".enrollment-reset-by-uninstall"
+        marker.write_text("settings-reset", encoding="ascii")
+        new = enrollment.provision(self.root)
+        self.assertEqual(new["generation"], 2)
+        self.assertFalse(marker.exists())
+        self.assertNotEqual(enrollment.read_device_secret(self.root), secret)
+        self.assertFalse(enrollment.check_access("Bearer " + old_token, self.root))
+
     def test_orphaned_enrollment_refused(self):
         path = self.root / "config" / "agent-credential.bin"
         path.parent.mkdir(parents=True)

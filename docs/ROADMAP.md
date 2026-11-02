@@ -47,7 +47,7 @@
 | **I3** Agent 스케줄러 제어 | 기존 Agent를 작업으로 등록, 서버/관리자/트레이에서 고정 태스크 start/stop/restart, 중복·busy·감사 처리 | 추가 상주 Supervisor 없음, 작업 시작 수락과 heartbeat Online 별도 검증 |
 | **I4** Pixel Pig Tray | 독립 Tray EXE, 기존 픽셀 돼지의 상태별 팔레트·아이콘, tooltip/menu/관리/로그 | 원본 컬러/흑백/회색/실패별 E2E, 트레이 종료 후 MCP는 계속 실행, 16px 판독 |
 | **I5** 장치 등록·자동 인증 | Installer 장치 키/OS principal 최초 등록, Named Pipe/CNG/DPAPI 보호, 단기 토큰·갱신/폐기, 서버 감사 | 최초 승인 뒤 수동 토큰 전달 0회, 재발급 자동 재연결, 위조/재생/권한 거부 |
-| **I6** Installer | 서명된 Inno Setup Setup.exe, 서비스·태스크·트레이·ACL 설치, 유지보수/업그레이드/제거 | 깨끗한 Win11 VM의 설치·부팅·업데이트·제거/재설치·보존 동작, 서명·SBOM |
+| **I6** Installer | 서명된 Inno Setup Setup.exe, 서비스·태스크·트레이·ACL 설치, 3모드 제거·SQLite 보존/검증 백업, 유지보수/업그레이드/제거 | 깨끗한 Win11 VM의 설치·부팅·업데이트·제거/재설치·보존 동작, 서명·SBOM |
 | **I7** 컷오버 | Docker 볼륨 SQLite 일관 백업, Native 스테이징·데이터 이전·URL/Firewall/Cloudflare 검증·롤백 리허설 | 운영 DB 건수/감사·Graph SHA 비교, Native E2E, **별도 운영 전환 승인** |
 
 I 트랙 기본 선행: `I0→I1→I2→I3→I4→I5→I6→I7`. I5 인증 설계는 I2/I3와 병렬 검토 가능하나 완성된 Installer에는 반드시 포함.

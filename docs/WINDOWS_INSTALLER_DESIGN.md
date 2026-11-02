@@ -104,3 +104,13 @@ Windows CI builds this unsigned preview and smoke-tests asset inclusion/loopback
 - The loopback Native server must confirm Agent state and `busy=false`. Unavailable state, missing busy metadata, or active Codex task blocks shutdown; combined stop requires a known fixed Task Scheduler state and stops that Agent first. If UAC is cancelled after Agent stop, the Agent may remain stopped; check both states and restart explicitly.
 - UAC launch success does **not** prove the SCM service finished stopping. Inspect Windows Services and Agent Task Scheduler on the actual machine. Tray-only exit still leaves both running. Naru/Docker is not affected.
 - Existing `%ProgramData%\\LKH-MCP\\config\\bootstrap.json` is deliberately preserved. For local login CSRF errors, check only `ADMIN_PUBLIC_ORIGIN` against the browser's exact scheme/host/port (`http://127.0.0.1:8001`). Do not disable Origin/CSRF checks or expose credential hashes.
+
+## Native Uninstaller: implemented staging modes
+
+| Mode | Installed binaries, owned SCM and tasks | ProgramData config / origin / DPAPI | SQLite, WAL, logs, backups |
+|---|---|---|---|
+| program | Remove | Preserve | Preserve |
+| settings (default) | Remove | Remove | Preserve |
+| all (double confirmation) | Remove | Remove | Remove only after validated recovery snapshot |
+
+The interactive uninstaller defaults to settings removal; silent removal also chooses settings, never all. The guarded `scripts/native-uninstall.ps1` validates the service executable and the **exact executable actions** of only `LKH-Codex-Agent` and `LKH-MCP-Tray`. A running service must return `busy=false` from the loopback endpoint. Any mismatched task/service, invalid path, reparse point, unreadable state, or failed stop blocks further removal; no Naru/Docker, other scheduled tasks, Cloudflare, Oracle, external profile or repo is touched. Reinstallation after settings reset uses a local one-time marker in the retained `data` directory to rotate the orphaned device verifier without wiping SQLite rows; missing credentials without that marker still fail closed. Full removal retains a verified WAL-aware SQLite snapshot *outside* the removed state under ACL-restricted `%ProgramData%\LKH-MCP-RemovalBackups\<unique-id>`. This retained copy needs a later, separately authorized deletion decision. Upgrades from old Inno uninstall logs and on-host UAC/SCM/ACL behavior require dedicated Windows VM E2E; CI alone is not production approval.

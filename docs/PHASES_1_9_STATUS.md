@@ -65,3 +65,5 @@ are deferred until the user can grant a test/deployment window. Do not mark Phas
 - New staging CI tests verify port isolation, shutdown conditions, and Pig palette. Signed Installer, real Cloudflare/WARP routing and corporate Windows Agent/SCM shutdown remain host-specific acceptance tests.
 
 - Native tray follow-up: right-click SCM/UAC server stop and combined stop actions (separate from tray-only exit); fail closed on missing heartbeat/busy state, with regression coverage. Login troubleshooting remains exact `ADMIN_PUBLIC_ORIGIN` comparison; existing bootstrap secrets are not auto-migrated. SCM stop and UAC on the target PC remain **not E2E verified**.
+
+- Native uninstall implementation staging: 3 modes (default settings reset but SQLite/WAL retained), exact task/SCM ownership checks, busy/reparse fail closed, verified separate SQLite backup for full deletion, and explicit re-enrollment marker for preserved DB. CI and isolated Windows uninstall/reinstall E2E pending.

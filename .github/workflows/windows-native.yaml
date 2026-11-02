@@ -47,6 +47,7 @@ jobs:
         run: |
           foreach ($name in @("build-native-server.ps1", "build-native-suite.ps1",
                               "install-agent-task.ps1", "native-installer-preflight.ps1",
+                               "native-uninstall.ps1",
                               "native-upgrade-preflight.ps1")) {
             $tokens = $null
             $errors = $null
@@ -187,6 +188,16 @@ jobs:
             foreach ($task in @("LKH-Codex-Agent", "LKH-MCP-Tray")) {
               Unregister-ScheduledTask -TaskName $task -Confirm:$false -ErrorAction SilentlyContinue
             }
+          }
+      - name: Verify bundled SQLite recovery snapshot helper (no deletion)
+        shell: pwsh
+        run: |
+          $source = Join-Path $env:RUNNER_TEMP "lkh-mcp-native-smoke/data/mcp.sqlite3"
+          $destination = Join-Path $env:RUNNER_TEMP "lkh-mcp-removal-backup-ci.sqlite3"
+          if (-not (Test-Path $source)) { throw "Native SQLite test database missing" }
+          & "./dist/LKH-MCP-DB-Backup/LKH-MCP-DB-Backup.exe" --source $source --destination $destination
+          if ($LASTEXITCODE -ne 0 -or -not (Test-Path $destination)) {
+            throw "Native recovery snapshot helper failed"
           }
       - name: Compile preview Installer (no installation)
         shell: pwsh
