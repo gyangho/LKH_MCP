@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import "./style.css";
+import pigMark from "../../branding/pig-terminal.png";
 import { CodexEventStream, InstructionsPanel, OperationsPanel } from "./phase_panels";
 
 type Page = "overview" | "tools" | "config" | "codex" | "instructions" | "operations";
@@ -172,7 +173,7 @@ function Login() {
   return (
     <main className="auth-page">
       <form className="login-card" onSubmit={signIn}>
-        <div className="brandmark">L</div>
+        <img className="pig-brandmark" src={pigMark} alt="Pixel Pig" />
         <p className="eyebrow">PRIVATE OPERATIONS</p>
         <h1>LKH MCP 관리자</h1>
         <p className="hint">
@@ -531,6 +532,21 @@ function Codex({
       setSaving("");
     }
   }
+  async function shutdownNative(target: "server" | "both") {
+    const name = target === "both" ? "서버와 Agent를 모두" : "MCP 서버를";
+    if (!confirm(name + " 종료하시겠습니까? 활성 Codex 작업 중에는 차단됩니다.\n관리자 페이지 연결도 종료됩니다.")) return;
+    setSaving("shutdown");
+    try {
+      await api("/admin/api/host/shutdown/" + target, {
+        confirm: target === "both" ? "STOP_BOTH" : "STOP_SERVER",
+      });
+      alert("종료 요청이 수락되었습니다. 다시 사용하려면 Windows 서비스에서 LKH-MCP-Server를 시작하세요.");
+    } catch (e) {
+      alert((e as Error).message);
+    } finally {
+      setSaving("");
+    }
+  }
   async function rotateEnrollment() {
     if (!confirm("기존 Agent 세션을 즉시 무효화하고 장치 인증정보를 교체하시겠습니까?")) return;
     setSaving("rotate");
@@ -578,6 +594,8 @@ function Codex({
             <Button onClick={() => void hostAction("start")} disabled={saving !== ""}>Agent 시작</Button>
             <Button onClick={() => void hostAction("stop")} disabled={saving !== "" || Boolean(agents?.agents.some(a => a.busy))} danger>Agent 중지</Button>
             <Button onClick={() => void hostAction("restart")} disabled={saving !== "" || Boolean(agents?.agents.some(a => a.busy))}>Agent 재시작</Button>
+            <Button onClick={() => void shutdownNative("server")} disabled={saving !== "" || Boolean(agents?.agents.some(a => a.busy))} danger>서버 종료</Button>
+            <Button onClick={() => void shutdownNative("both")} disabled={saving !== "" || Boolean(agents?.agents.some(a => a.busy))} danger>서버 + Agent 모두 종료</Button>
           </div>
           {nativeEnrollment && (
             <p className="muted">
@@ -768,13 +786,13 @@ function App() {
     }
   }, []);
   useEffect(() => {
-    if (login) return;
+    if (login || page === "operations" || page === "instructions") return;
     void refresh();
     const timer = setInterval(() => {
       if (!document.hidden) void refresh();
-    }, 10000);
+    }, 15000);
     return () => clearInterval(timer);
-  }, [login, refresh]);
+  }, [login, refresh, page]);
   useEffect(() => {
     if (login) return;
     const handler = () =>
@@ -799,10 +817,10 @@ function App() {
     <div className="layout">
       <aside className="sidebar">
         <div className="brand">
-          <div className="brandmark">L</div>
+          <img className="pig-brandmark" src={pigMark} alt="Pixel Pig" />
           <div>
             <strong>LKH MCP</strong>
-            <small>PRIVATE CONTROL CENTER</small>
+            <small>PIXEL PIG CONTROL CENTER</small>
           </div>
         </div>
         <nav aria-label="주 메뉴" className="nav">
@@ -827,7 +845,7 @@ function App() {
           <div>
             <div className="eyebrow">INFRASTRUCTURE / OPERATIONS</div>
             <h1>{labels[page]}</h1>
-            <p className="muted">LKH MCP 시스템의 상태와 권한을 관리합니다.</p>
+            <p className="muted">PIXEL PIG · 서비스와 Agent를 관리하는 Private Control Center</p>
           </div>
           <div className="actions">
             <span className={"tag" + (error ? " bad" : "")}>
