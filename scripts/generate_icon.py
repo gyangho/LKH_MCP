@@ -29,15 +29,15 @@ def generate(output_dir: Path | None = None) -> tuple[Path, Path]:
     ico_path = folder / "lkh-mcp.ico"
     icon.save(png_path, format="PNG", optimize=True)
     icon.save(ico_path, format="ICO", sizes=ICON_SIZES)
-    # Same approved Pixel Pig pixels: alter its palette only. Preserve alpha and silhouette.
-    palette = {"online": (31, 182, 101), "offline": (239, 86, 153),
-               "unknown": (135, 145, 157)}
+    # Preserve original Pig pixels as full color when Agent heartbeat is online.\n    # Server-only state uses true luminance-based grayscale; unavailable is dim.
+    palette = {"offline": (205, 205, 205), "unknown": (94, 99, 108)}
+    icon.save(folder / "pig-online.png", format="PNG", optimize=True)
     for state, tint in palette.items():
         variant = icon.copy()
         pixels = []
         for red, green, blue, alpha in icon.getdata():
             luminance = (red * 299 + green * 587 + blue * 114) // 1000
-            factor = 0.17 + 0.83 * luminance / 255
+            factor = (luminance / 255) if state == "offline" else (0.12 + 0.48 * luminance / 255)
             pixels.append((int(tint[0] * factor), int(tint[1] * factor),
                            int(tint[2] * factor), alpha))
         variant.putdata(pixels)

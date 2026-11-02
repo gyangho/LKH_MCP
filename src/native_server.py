@@ -44,6 +44,8 @@ def main(argv: list[str] | None = None) -> int:
 
     async def run():
         stop_event = asyncio.Event()
+        from native_shutdown import arm
+        arm(stop_event)
         watcher = None
         if args.stop_file:
             stop_file = Path(args.stop_file).resolve()
@@ -62,7 +64,7 @@ def main(argv: list[str] | None = None) -> int:
         try:
             await run_native_gateways(
                 mcp, host=os.environ["MCP_HOST"], mcp_port=int(os.environ["MCP_PORT"]),
-                admin_port=int(os.environ["LKH_NATIVE_ADMIN_PORT"]), stop_event=stop_event if watcher else None)
+                admin_port=int(os.environ["LKH_NATIVE_ADMIN_PORT"]), stop_event=stop_event)
         finally:
             if watcher:
                 watcher.cancel()

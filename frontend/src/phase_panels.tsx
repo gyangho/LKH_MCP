@@ -144,12 +144,24 @@ export function InstructionsPanel() {
     <section className="panel">
       <h2>{selected ? "지침 수정·발행" : "지침 작성"}</h2>
       {error && <p className="error" role="alert">{error}</p>}
-      <label>이름 <input value={name} disabled={!!selected} onChange={e => setName(e.target.value)} placeholder="name_slug" /></label>
-      <label>범위 <select value={scope} disabled={!!selected} onChange={e => setScope(e.target.value)}>
-        {["global","project","agent","tool"].map(v => <option key={v}>{v}</option>)}
-      </select></label>
-      {scope !== "global" && <label>범위 키 <input disabled={!!selected} value={scopeKey} onChange={e => setScopeKey(e.target.value)} /></label>}
-      <label>지침 본문 <textarea rows={8} value={body} onChange={e => setBody(e.target.value)} maxLength={4000} /></label>
+      <div className="field-grid">
+        <label className="form-field"><span>지침 이름</span>
+          <input value={name} disabled={!!selected} onChange={e => setName(e.target.value)} placeholder="instruction_name" maxLength={60} />
+        </label>
+        <label className="form-field"><span>적용 범위</span>
+          <select value={scope} disabled={!!selected} onChange={e => setScope(e.target.value)}>
+            {["global","project","agent","tool"].map(v => <option key={v} value={v}>{v}</option>)}
+          </select>
+        </label>
+        {scope !== "global" && <label className="form-field field-full"><span>범위 식별자</span>
+          <input value={scopeKey} disabled={!!selected} onChange={e => setScopeKey(e.target.value)} placeholder="project-or-agent-id" />
+        </label>}
+        <label className="form-field field-full"><span>지침 본문</span>
+          <textarea className="instruction-editor" rows={12} value={body}
+            onChange={e => setBody(e.target.value)} maxLength={4000} placeholder="Codex가 참고할 지침을 입력하세요." />
+          <small className="field-hint">{body.length} / 4000자 · Draft로 저장한 뒤 명시적으로 발행합니다.</small>
+        </label>
+      </div>
       <div className="actions">
         <button className="button" disabled={busy} onClick={() => void submit(selected ? "save" : "create")}>
           {selected ? "새 Draft 버전 저장" : "Draft 생성"}</button>
@@ -171,6 +183,8 @@ type Bucket = { minute: number; requests: number; errors: number; avg_duration_m
 type AlertState = { queue: Record<string, number>; alerts: string[];
   agents: {total: number; online: number}; stale_leases: number };
 export function OperationsPanel() {
+  // Deliberately no polling: updating alerts, metrics and logs while the user
+  // scrolls/selects text reorders the table and makes incident analysis unusable.
   const [logs, setLogs] = useState<Log[]>([]);
   const [logFilter, setLogFilter] = useState("");
   const [buckets, setBuckets] = useState<Bucket[]>([]);
@@ -179,59 +193,97 @@ export function OperationsPanel() {
     threads: number; uptime_seconds: number} | null>(null);
   const [error, setError] = useState("");
   const [cursor, setCursor] = useState(0);
-  const refresh = useCallback(async () => {
+  const [loadingLogs, setLoadingLogs] = useState(false);
+  const [loadingStats, setLoadingStats] = useState(false);
+  const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
+
+  const loadLogs = useCallback(async () => {
+    setLoadingLogs(true);
     try {
-      const [log, metric] = await Promise.all([
-        secureApi<{events: Log[]; cursor: number}>(`/admin/api/operations/logs?cursor=${cursor}`),
-        secureApi<{buckets: Bucket[]; runtime: typeof runtime}>(`/admin/api/operations/metrics?minutes=60`),
-      ]);
-      setLogs(prev => [...new Map([...prev, ...log.events].map(e => [e.id, e])).values()].slice(-200));
-      setCursor(log.cursor);
-      setBuckets(metric.buckets); setRuntime(metric.runtime); setError("");
-      void secureApi<AlertState>("/admin/api/operations/alerts").then(setAlerts).catch(() => setAlerts(null));
+      const data = await secureApi<{events: Log[]; cursor: number}>(
+        `/admin/api/operations/logs?cursor=${cursor}`);
+      setLogs(prev => [...new Map([...prev, ...data.events].map(e => [e.id, e])).values()].slice(-400));
+      setCursor(data.cursor);
+      setError("");
     } catch (err) { setError((err as Error).message); }
+    finally { setLoadingLogs(false); }
   }, [cursor]);
+
+  const loadStats = useCallback(async () => {
+    setLoadingStats(true);
+    try {
+      const [metric, alert] = await Promise.all([
+        secureApi<{buckets: Bucket[]; runtime: typeof runtime}>("/admin/api/operations/metrics?minutes=60"),
+        secureApi<AlertState>("/admin/api/operations/alerts"),
+      ]);
+      setBuckets(metric.buckets);
+      setRuntime(metric.runtime);
+      setAlerts(alert);
+      setUpdatedAt(new Date());
+      setError("");
+    } catch (err) { setError((err as Error).message); }
+    finally { setLoadingStats(false); }
+  }, []);
+
   useEffect(() => {
-    void refresh();
-    const timer = setInterval(() => { if (!document.hidden) void refresh(); }, 10000);
-    return () => clearInterval(timer);
-  }, [refresh]);
-  return <>
+    // Mount-time fetch only. Further requests require explicit button clicks.
+    void loadLogs();
+    void loadStats();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const maxCount = Math.max(1, ...buckets.map(b => b.requests));
+  return <div className="operations-view">
     <section className="panel">
-      <h2>운영 지표 · 최근 60분</h2>
-      {alerts && <p role="status">대기 {alerts.queue.queued ?? 0}건 · Agent {alerts.agents.online}/{alerts.agents.total} Online · 경고 {alerts.alerts.length ? alerts.alerts.join(", ") : "없음"}</p>}
-      {error && <p className="error" role="alert">{error}</p>}
+      <div className="heading">
+        <div><h2>운영 지표 · 최근 60분</h2><p className="muted">자동 갱신 없음 · 읽기 중 화면이 움직이지 않습니다.</p></div>
+        <button type="button" className="button" disabled={loadingStats} onClick={() => void loadStats()}>
+          {loadingStats ? "조회 중..." : "지표·경고 새로고침"}
+        </button>
+      </div>
+      {alerts && <p role="status" className="status-strip">
+        대기 {alerts.queue.queued ?? 0}건 · Agent {alerts.agents.online}/{alerts.agents.total} Online
+        · 경고 {alerts.alerts.length ? alerts.alerts.join(", ") : "없음"}
+      </p>}
+      {error && <p role="alert" className="error">{error}</p>}
       <p>CPU {runtime?.cpu_percent ?? "—"}% · RSS {runtime?.memory_mb ?? "—"} MB ·
-        Threads {runtime?.threads ?? "—"} · Uptime {runtime?.uptime_seconds ?? "—"}초</p>
-      <div role="img" aria-label="최근 60분 분당 요청량 막대 그래프"
-           style={{ height: 112, display: "flex", gap: 3, alignItems: "flex-end",
-                    overflowX: "auto", padding: "8px 0" }}>
-        {buckets.slice(-60).map(b => {
-          const max = Math.max(1, ...buckets.map(item => item.requests));
-          const height = Math.max(3, Math.round(96 * b.requests / max));
-          return <div key={b.minute}
-            title={new Date(b.minute * 1000).toLocaleTimeString("ko-KR") +
-              " · 요청 " + b.requests + "건, 오류 " + b.errors + "건"}
-            style={{ height, width: 10, minWidth: 7, borderRadius: 2,
-                     background: b.errors ? "#c87575" : "#638ba7" }} />;
-        })}
+        Threads {runtime?.threads ?? "—"} · Uptime {runtime?.uptime_seconds ?? "—"}초
+        {updatedAt && <span className="muted"> · 갱신 {updatedAt.toLocaleTimeString("ko-KR")}</span>}</p>
+      <div className="pixel-chart" role="img" aria-label="최근 60분 분당 요청량 막대 그래프">
+        {buckets.slice(-60).map(b => <div key={b.minute}
+          title={new Date(b.minute * 1000).toLocaleTimeString("ko-KR") + " · 요청 " + b.requests + "건, 오류 " + b.errors + "건"}
+          className={"pixel-bar" + (b.errors ? " has-error" : "")}
+          style={{ height: Math.max(3, Math.round(96 * b.requests / maxCount)) }} />)}
       </div>
       <div className="table-wrap"><table><thead><tr><th>분</th><th>요청</th><th>오류</th><th>평균 ms</th></tr></thead>
         <tbody>{buckets.slice(-60).map(b => <tr key={b.minute}>
           <td>{new Date(b.minute * 1000).toLocaleTimeString("ko-KR")}</td>
-          <td>{b.requests}</td><td>{b.errors}</td><td>{b.avg_duration_ms}</td></tr>)}</tbody>
-      </table></div>
-    </section>
-    <section className="panel">
-      <h2>구조화 로그 (메타데이터만)</h2>
-      <label>로그 필터 <input value={logFilter} onChange={e => setLogFilter(e.target.value)} placeholder="도구명 / 카테고리 / Trace ID" /></label>
-      <p className="muted">30일 보존 · 프롬프트·명령·인증 토큰·출력 본문 미저장</p>
-      <div className="table-wrap"><table><thead><tr><th>시각</th><th>구분</th><th>이름</th><th>결과</th><th>ms</th><th>Trace ID</th></tr></thead>
-        <tbody>{logs.slice().reverse().filter(e => (e.name + " " + e.category + " " + e.result + " " + e.trace_id).toLowerCase().includes(logFilter.toLowerCase())).map(e => <tr key={e.id}>
-          <td>{new Date(e.at * 1000).toLocaleString("ko-KR")}</td>
-          <td>{e.category}</td><td>{e.name}</td><td>{e.result}</td><td>{e.duration_ms}</td><td title={e.trace_id}>{e.trace_id.slice(0, 10)}</td>
+          <td>{b.requests}</td><td>{b.errors}</td><td>{b.avg_duration_ms}</td>
         </tr>)}</tbody>
       </table></div>
     </section>
-  </>;
+    <section className="panel">
+      <div className="heading">
+        <div><h2>구조화 로그</h2><p className="muted">자동 갱신 중지 · 다음 기록은 버튼을 눌러 불러옵니다.</p></div>
+        <button className="button" type="button" disabled={loadingLogs} onClick={() => void loadLogs()}>
+          {loadingLogs ? "조회 중..." : "다음 로그 100건"}
+        </button>
+      </div>
+      <label className="form-field"><span>로그 검색 (현재 로드된 항목)</span>
+        <input value={logFilter} onChange={e => setLogFilter(e.target.value)}
+          placeholder="도구명 / 분류 / 결과 / Trace ID" />
+      </label>
+      <p className="muted">표시 {logs.length}건 · 30일 보존 · 프롬프트·명령·인증정보 저장하지 않음</p>
+      <div className="table-wrap stable-log-table"><table><thead><tr>
+        <th>시각</th><th>분류</th><th>이름</th><th>결과</th><th>ms</th><th>Trace ID</th>
+      </tr></thead><tbody>
+        {logs.filter(e => (e.name + " " + e.category + " " + e.result + " " + e.trace_id)
+          .toLowerCase().includes(logFilter.toLowerCase())).map(e => <tr key={e.id}>
+          <td>{new Date(e.at * 1000).toLocaleString("ko-KR")}</td>
+          <td>{e.category}</td><td>{e.name}</td><td>{e.result}</td>
+          <td>{e.duration_ms}</td><td title={e.trace_id}>{e.trace_id.slice(0, 10)}</td>
+        </tr>)}
+      </tbody></table></div>
+    </section>
+  </div>;
 }

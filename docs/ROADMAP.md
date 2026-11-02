@@ -8,7 +8,7 @@
 
 1. `LKH-MCP-Setup.exe` **하나로 설치·업데이트·제거**, 프로그램은 Windows Service/Tray/Codex Agent 3개 역할로 분리. Agent용 별도 Supervisor 상주 금지.
 2. Service는 부팅 후 로그인 없이 동작. Task Scheduler는 Codex 로그인 사용자의 고정 `LKH-Codex-Agent` 작업을 실행. 관리자/트레이에서 시작·중지·재시작, 실시간 상태.
-3. 승인된 `branding/pig-terminal.png` Pixel Pig를 원본으로 트레이 Online **초록**, Offline **핑크**, Server 장애·상태 미확인은 **회색**. 색 외에 텍스트 상태 및 tooltip 제공.
+3. 승인된 `branding/pig-terminal.png` Pixel Pig를 원본으로 트레이 서버+인증 Agent Online **원본 컬러**, 서버만 Online **흑백**, 서버 장애·상태 미확인은 **회색**. 색 외에 텍스트 상태 및 tooltip 제공.
 4. Installer에서 신뢰 관계 최초 등록, OS 보호 자격증명 기반으로 Agent가 서버에 자동 인증·단기 토큰 수신·갱신. 서버에서 토큰 재발급해도 Windows PowerShell/파일 수동 수정 불필요. **무인증 토큰 발급 API 불가**.
 5. 기존 MCP API/Oracle/관리자/권한/Graphify/작업 큐와 Codex CLI 이벤트 기반 콘솔·지침 관리·감사/로그/메트릭·Skill 검증.
 6. 실제 Docker, Naru, Cloudflare private WARP 경계 및 SQLite 데이터는 Native 동등성/백업/롤백 검증과 별도 cutover 승인 전 유지.
@@ -27,7 +27,7 @@
 ## 트랙 A 첫 구현: refac 브랜치 (I0/I1 진행 중)
 
 - [I0 기준선·전환 위험 인벤토리](TRACK_A_I0_BASELINE.md)를 코드와 대조하여 작성. 실 Naru/WARP/Oracle/Windows 점검은 남아 있으며 I0는 VERIFIED가 아니다.
-- I1은 `src/native_runtime.py` + `src/native_server.py`의 **loopback 전용 포트 18080 staging**과 독립 ProgramData SQLite 경로, `--check` 패키지 검증, `scripts/build-native-server.ps1`, Windows Actions 패키징 단계까지 시작.
+- I1은 `src/native_runtime.py` + `src/native_server.py`의 **기본 loopback 포트 8000(MCP)/8001(Admin)** (Naru 병행 staging에서는 명시적으로 18080/18081 사용)과 독립 ProgramData SQLite 경로, `--check` 패키지 검증, `scripts/build-native-server.ps1`, Windows Actions 패키징 단계까지 시작.
 - 현재 서버 단일 백엔드는 `/mcp`와 `/admin`을 함께 호스팅한다. Native preview를 비루프백에 노출하지 않으며, **동등한 포트·경로 격리를 구현하기 전 I1 완료/배포 판정 금지**.
 - PyInstaller에서 UI UX Pro Max 툴은 외부 Python 경로가 필요한 구조이므로 완전한 Native 기능 동등성은 아직 불합격.
 - Windows 실행환경에서의 설치/서비스/Oracle Thick/Cloudflare/WARP/트레이 상태 검증은 별도 미완료.
@@ -44,7 +44,7 @@
 | **I1** Windows 서버 | React 정적 번들+Python MCP 패키징(onedir), Native 분리된 앱 리스너·ProgramData 경로, Oracle 의존성 | Windows VM에서 MCP/Admin 기능·비공개 포트·Oracle fake+real smoke, Docker 비교 |
 | **I2** SCM Service | 부팅 자동 시작·실패 복구·저권한 계정·DB/log ACL·서비스의 IPC 접근 | 로그오프·재부팅·crash 후 복구, 일반 사용자 관리자 권한 불필요 |
 | **I3** Agent 스케줄러 제어 | 기존 Agent를 작업으로 등록, 서버/관리자/트레이에서 고정 태스크 start/stop/restart, 중복·busy·감사 처리 | 추가 상주 Supervisor 없음, 작업 시작 수락과 heartbeat Online 별도 검증 |
-| **I4** Pixel Pig Tray | 독립 Tray EXE, 기존 픽셀 돼지의 상태별 팔레트·아이콘, tooltip/menu/관리/로그 | 녹색/핑크/회색/실패별 E2E, 트레이 종료 후 MCP는 계속 실행, 16px 판독 |
+| **I4** Pixel Pig Tray | 독립 Tray EXE, 기존 픽셀 돼지의 상태별 팔레트·아이콘, tooltip/menu/관리/로그 | 원본 컬러/흑백/회색/실패별 E2E, 트레이 종료 후 MCP는 계속 실행, 16px 판독 |
 | **I5** 장치 등록·자동 인증 | Installer 장치 키/OS principal 최초 등록, Named Pipe/CNG/DPAPI 보호, 단기 토큰·갱신/폐기, 서버 감사 | 최초 승인 뒤 수동 토큰 전달 0회, 재발급 자동 재연결, 위조/재생/권한 거부 |
 | **I6** Installer | 서명된 Inno Setup Setup.exe, 서비스·태스크·트레이·ACL 설치, 유지보수/업그레이드/제거 | 깨끗한 Win11 VM의 설치·부팅·업데이트·제거/재설치·보존 동작, 서명·SBOM |
 | **I7** 컷오버 | Docker 볼륨 SQLite 일관 백업, Native 스테이징·데이터 이전·URL/Firewall/Cloudflare 검증·롤백 리허설 | 운영 DB 건수/감사·Graph SHA 비교, Native E2E, **별도 운영 전환 승인** |

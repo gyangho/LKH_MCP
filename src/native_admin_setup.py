@@ -37,7 +37,7 @@ def initialize(*, username: str = "admin", root: Path | None = None,
     content = {
         "ADMIN_LOGIN_USER": username,
         "ADMIN_PASSWORD_HASH": make_password_hash(password),
-        "ADMIN_PUBLIC_ORIGIN": "http://127.0.0.1:18081",
+        "ADMIN_PUBLIC_ORIGIN": "http://127.0.0.1:8001",
     }
     temporary = config / ("bootstrap-" + secrets.token_hex(12) + ".tmp")
     try:

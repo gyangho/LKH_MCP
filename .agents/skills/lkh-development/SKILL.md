@@ -31,7 +31,7 @@ Scope: repository `gyangho/LKH_MCP`. Work on `refac` unless the user explicitly 
 
 **Operations (Phases 7–8):** `src/operations_store.py` stores metadata-only event rows and minute buckets, 30 days/50k row bound. GET `/admin/api/operations/logs`, GET `/admin/api/operations/metrics?minutes=60`. CPU/RSS are sampled from runtime telemetry. Never persist raw HTTP headers, path queries, prompts, command results or stack traces.
 
-**Windows Native (I0–I7):** Keep `127.0.0.1:18080/mcp` and `127.0.0.1:18081/admin` isolated in staging. SCM service, Task Scheduler and Pixel Pig tray are independent. Agent DPAPI enrollment is local first release, not a replacement for audited non-exportable key/challenge-response and protected remote transport. Installer build may produce unsigned artifacts for CI; executing it on the user's PC requires explicit approval.
+**Windows Native (I0–I7):** Keep MCP and Admin on separate loopback listeners. Native defaults are `127.0.0.1:8000/mcp` and `127.0.0.1:8001/admin`; when Naru still owns those ports, isolated staging may explicitly use `18080/18081` without changing the live gateway. SCM service, Task Scheduler and Pixel Pig tray are independent. Agent DPAPI enrollment is local first release, not a replacement for audited non-exportable key/challenge-response and protected remote transport. Installer build may produce unsigned artifacts for CI; executing it on the user's PC requires explicit approval.
 
 ## Offline regression
 
