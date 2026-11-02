@@ -91,12 +91,21 @@ def provision(root: Path | None = None, *, rotate: bool = False) -> dict:
     """Admin-only installer action; rotation writes a new local protected blob."""
     path, _ = _paths(root)
     path.parent.mkdir(parents=True, exist_ok=True)
+    # Marker is created only after an explicit Installer uninstall settings reset.
+    # Preserve the DB (including verifier) but permit controlled re-enrollment.
+    marker = path.parent.parent / "data" / ".enrollment-reset-by-uninstall"
+    reset_after_uninstall = False
     with _connect(root) as db:
         current = db.execute("SELECT generation FROM native_device WHERE id=1").fetchone()
         if current and not rotate:
             if not path.is_file():
-                raise RuntimeError("Registered device key missing; operator recovery required")
-            return {"provisioned": True, "generation": current[0], "unchanged": True}
+                if marker.is_file() and not marker.is_symlink():
+                    rotate = True
+                    reset_after_uninstall = True
+                else:
+                    raise RuntimeError("Registered device key missing; operator recovery required")
+            else:
+                return {"provisioned": True, "generation": current[0], "unchanged": True}
         # Fail closed: never overwrite an unknown device key without explicit rotation.
         if path.exists() and not current:
             raise RuntimeError("Orphaned device key; operator recovery required")
@@ -138,6 +147,8 @@ def provision(root: Path | None = None, *, rotate: bool = False) -> dict:
             raise
         finally:
             tmp.unlink(missing_ok=True)
+    if reset_after_uninstall:
+        marker.unlink(missing_ok=True)
     return {"provisioned": True, "generation": generation, "unchanged": False}
 
 

@@ -34,6 +34,8 @@ Source: "..\dist\LKH-MCP-Admin-Setup\*"; DestDir: "{app}\LKH-MCP-Admin-Setup"; F
 Source: "..\scripts\native-installer-preflight.ps1"; DestDir: "{app}\scripts"; Flags: ignoreversion
 Source: "..\scripts\native-upgrade-preflight.ps1"; DestDir: "{app}\scripts"; Flags: ignoreversion
 Source: "..\scripts\install-agent-task.ps1"; DestDir: "{app}\scripts"; Flags: ignoreversion
+Source: "..\scripts\native-uninstall.ps1"; DestDir: "{app}\scripts"; Flags: ignoreversion
+Source: "..\dist\LKH-MCP-DB-Backup\*"; DestDir: "{app}\LKH-MCP-DB-Backup"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\windows_agent\config.example.json"; DestDir: "{commonappdata}\LKH-MCP\config"; DestName: "agent.example.json"; Flags: onlyifdoesntexist uninsneveruninstall
 
 [Icons]
@@ -50,10 +52,7 @@ Filename: "{app}\LKH-MCP-Service\LKH-MCP-Service.exe"; Parameters: "--startup au
 Filename: "{app}\LKH-MCP-Service\LKH-MCP-Service.exe"; Parameters: "start"; Flags: runhidden waituntilterminated
 Filename: "{app}\LKH-MCP-Tray\LKH-MCP-Tray.exe"; Description: "Start Pixel Pig tray"; Flags: nowait postinstall skipifsilent runasoriginaluser
 
-[UninstallRun]
-Filename: "{app}\LKH-MCP-Service\LKH-MCP-Service.exe"; Parameters: "stop"; Flags: runhidden waituntilterminated
-Filename: "{app}\LKH-MCP-Service\LKH-MCP-Service.exe"; Parameters: "remove"; Flags: runhidden waituntilterminated
-Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ""Unregister-ScheduledTask -TaskName 'LKH-Codex-Agent' -Confirm:$false -ErrorAction SilentlyContinue; Unregister-ScheduledTask -TaskName 'LKH-MCP-Tray' -Confirm:$false -ErrorAction SilentlyContinue"""; Flags: runhidden waituntilterminated
+; Native removal handled by checked [Code] hook; no unchecked automatic uninstall actions.
 
 [Code]
 var
@@ -127,6 +126,80 @@ begin
         MsgBox('The project checkout must be an absolute local Windows path.', mbError, MB_OK);
         Result := False;
       end;
+    end;
+  end;
+end;
+
+
+{ Uninstaller default: remove program and settings, preserve SQLite/WAL/logs/backups. }
+var
+  RemovalMode: String;
+
+function RunNativeRemoval(StageName: String): Boolean;
+var
+  Params: String;
+  ExitCode: Integer;
+begin
+  ExitCode := -1;
+  Params := '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' +
+    ExpandConstant('{app}\scripts\native-uninstall.ps1') + '" -Stage ' +
+    StageName + ' -Mode ' + RemovalMode + ' -InstallDir "' + ExpandConstant('{app}') + '"';
+  Result := Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
+    Params, '', SW_HIDE, ewWaitUntilTerminated, ExitCode);
+  Result := Result and (ExitCode = 0);
+end;
+
+function InitializeUninstall(): Boolean;
+var
+  Selection: Integer;
+begin
+  RemovalMode := 'settings';
+  Result := True;
+  if not UninstallSilent() then begin
+    Selection := MsgBox(
+      'LKH MCP 제거 방식' + #13#10 + #13#10 +
+      '[예] 프로그램 + 설정 제거 (기본값; SQLite DB/로그/백업 보존)' + #13#10 +
+      '[아니요] 다른 제거 옵션 선택' + #13#10 +
+      '[취소] 중단', mbConfirmation, MB_YESNOCANCEL or MB_DEFBUTTON1);
+    if Selection = idCancel then begin Result := False; Exit; end;
+    if Selection = idNo then begin
+      Selection := MsgBox(
+        '[예] 프로그램만 제거 (설정 및 SQLite DB 보존)' + #13#10 +
+        '[아니요] 모든 앱 데이터 제거 (SQLite 포함)' + #13#10 +
+        '[취소] 중단', mbConfirmation, MB_YESNOCANCEL or MB_DEFBUTTON1);
+      if Selection = idCancel then begin Result := False; Exit; end;
+      if Selection = idYes then
+        RemovalMode := 'program'
+      else begin
+        RemovalMode := 'all';
+        if MsgBox('전체 삭제: ProgramData의 LKH-MCP 설정/SQLite/로그/백업이 삭제됩니다.' + #13#10 +
+          'SQLite는 별도 ACL 보호 폴더에 먼저 검증 백업하고 그 백업은 보존합니다.' + #13#10 +
+          '계속하시겠습니까?',
+          mbCriticalError, MB_YESNO or MB_DEFBUTTON2) <> idYes then begin
+          Result := False; Exit;
+        end;
+        if MsgBox('최종 확인: 모든 LKH-MCP 데이터의 삭제를 승인합니까?',
+          mbCriticalError, MB_YESNO or MB_DEFBUTTON2) <> idYes then begin
+          Result := False; Exit;
+        end;
+      end;
+    end;
+  end;
+  if not RunNativeRemoval('verify') then begin
+    MsgBox('제거 사전 검증 실패: 서비스/작업 소유권, 실행 상태 또는 데이터 경로를 확인하세요.',
+      mbCriticalError, MB_OK);
+    Result := False;
+  end;
+end;
+
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+begin
+  if CurUninstallStep = usUninstall then begin
+    if not RunNativeRemoval('remove') then begin
+      MsgBox('제거 처리 실패: 일부 서비스/작업이 중지되었을 수 있습니다.' + #13#10 +
+        '프로그램 파일 삭제는 중단합니다. 보존 데이터를 확인하세요.',
+        mbCriticalError, MB_OK);
+      Abort;
     end;
   end;
 end;

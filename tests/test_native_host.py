@@ -52,6 +52,9 @@ class TaskTests(unittest.TestCase):
         for task_state_value in ("ready", "disabled", "queued"):
             self.assertEqual(compute_tray_state(active, task_state_value)["state"], "offline")
         self.assertEqual(compute_tray_state(active, "unavailable")["state"], "unknown")
+        stale_busy = dict(active, agents=[{"online": False, "busy": True}])
+        self.assertTrue(compute_tray_state(stale_busy, "ready")["busy"])
+        self.assertTrue(compute_tray_state(stale_busy, "unavailable")["busy"])
 
     def test_tray_requires_server_verdict_not_scheduler_state(self):
         def reply(status, payload):
