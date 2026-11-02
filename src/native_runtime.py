@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import MutableMapping
 
 _LOOPBACK = frozenset({"127.0.0.1", "::1", "localhost"})
-_PREVIEW_PORT = "18080"
+_PREVIEW_PORT = "8000"
 
 
 def native_state_dir(
@@ -47,13 +47,11 @@ def prepare_native_environment(
     port = values.get("MCP_PORT") or _PREVIEW_PORT
     if not port.isdecimal() or not 1 <= int(port) <= 65535:
         raise ValueError("Invalid MCP_PORT")
-    if port in {"8000", "8001"}:
-        raise ValueError("Native preview cannot reuse the live Docker gateway ports 8000/8001")
-    admin_port = values.get("LKH_NATIVE_ADMIN_PORT") or "18081"
+    admin_port = values.get("LKH_NATIVE_ADMIN_PORT") or "8001"
     if not admin_port.isdecimal() or not 1 <= int(admin_port) <= 65535:
         raise ValueError("Invalid native admin port")
-    if admin_port in {"8000", "8001"} or port == admin_port:
-        raise ValueError("Preview ports must be distinct and cannot use live Docker ports")
+    if int(port) == int(admin_port):
+        raise ValueError("MCP and Admin listeners must use separate ports")
     values["LKH_NATIVE_MODE"] = "1"
     values["LKH_NATIVE_ADMIN_PORT"] = admin_port
     values["MCP_HOST"] = host

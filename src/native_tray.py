@@ -22,7 +22,7 @@ def assets_dir() -> Path:
 
 
 def _admin_base() -> str:
-    port = os.getenv("LKH_NATIVE_ADMIN_PORT", "18081")
+    port = os.getenv("LKH_NATIVE_ADMIN_PORT", "8001")
     if not port.isdecimal() or not 1 <= int(port) <= 65535:
         raise ValueError("Invalid native administrator port")
     return "http://127.0.0.1:" + port
