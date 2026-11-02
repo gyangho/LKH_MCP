@@ -149,40 +149,96 @@ begin
   Result := Result and (ExitCode = 0);
 end;
 
-function InitializeUninstall(): Boolean;
+{ One checkbox replaces the former Yes/No branching removal mode selector. }
+function SelectUninstallMode(): Boolean;
 var
-  Selection: Integer;
+  Form: TSetupForm;
+  Description, Hint: TNewStaticText;
+  FullRemoval: TNewCheckBox;
+  RemoveButton, CancelButton: TNewButton;
+begin
+  Result := False;
+  Form := CreateCustomForm();
+  try
+    Form.Caption := 'LKH MCP 제거 옵션';
+    Form.ClientWidth := ScaleX(460);
+    Form.ClientHeight := ScaleY(184);
+    Form.Position := poDesktopCenter;
+
+    Description := TNewStaticText.Create(Form);
+    Description.Parent := Form;
+    Description.Left := ScaleX(14);
+    Description.Top := ScaleY(12);
+    Description.Width := Form.ClientWidth - ScaleX(28);
+    Description.Height := ScaleY(36);
+    Description.AutoSize := False;
+    Description.Caption := '기본 삭제: 프로그램, Windows 서비스, 작업 스케줄러 및 설정을 제거합니다.' + #13#10 +
+      'SQLite 데이터베이스, 로그, 백업은 보존합니다.';
+
+    FullRemoval := TNewCheckBox.Create(Form);
+    FullRemoval.Parent := Form;
+    FullRemoval.Left := ScaleX(14);
+    FullRemoval.Top := ScaleY(59);
+    FullRemoval.Width := Form.ClientWidth - ScaleX(28);
+    FullRemoval.Height := ScaleY(24);
+    FullRemoval.Caption := '완전 삭제 (SQLite DB, 설정, 로그 및 백업까지 삭제)';
+    FullRemoval.Checked := False;
+
+    Hint := TNewStaticText.Create(Form);
+    Hint.Parent := Form;
+    Hint.Left := ScaleX(14);
+    Hint.Top := ScaleY(93);
+    Hint.Width := Form.ClientWidth - ScaleX(28);
+    Hint.Height := ScaleY(39);
+    Hint.AutoSize := False;
+    Hint.Caption := '완전 삭제를 선택하면 검증된 SQLite 복구 사본을 별도 보호 폴더에' + #13#10 +
+      '남긴 뒤 LKH-MCP 데이터 폴더를 제거합니다.';
+
+    RemoveButton := TNewButton.Create(Form);
+    RemoveButton.Parent := Form;
+    RemoveButton.Width := ScaleX(85);
+    RemoveButton.Height := ScaleY(25);
+    RemoveButton.Left := Form.ClientWidth - ScaleX(188);
+    RemoveButton.Top := Form.ClientHeight - ScaleY(38);
+    RemoveButton.Caption := '제거';
+    RemoveButton.ModalResult := mrOk;
+    RemoveButton.Default := True;
+
+    CancelButton := TNewButton.Create(Form);
+    CancelButton.Parent := Form;
+    CancelButton.Width := ScaleX(85);
+    CancelButton.Height := ScaleY(25);
+    CancelButton.Left := Form.ClientWidth - ScaleX(94);
+    CancelButton.Top := RemoveButton.Top;
+    CancelButton.Caption := '취소';
+    CancelButton.ModalResult := mrCancel;
+    CancelButton.Cancel := True;
+
+    Form.ActiveControl := FullRemoval;
+    if Form.ShowModal <> mrOk then Exit;
+    if FullRemoval.Checked then begin
+      { Checking the box is the only way to select full removal. }
+      if MsgBox('완전 삭제 확인: LKH-MCP 설정, SQLite DB, 로그 및 백업을 삭제합니다.' + #13#10 +
+        'SQLite 복구 사본은 보호된 별도 폴더에 보존됩니다.' + #13#10 +
+        '완전 삭제를 진행하려면 [확인]을 누르세요.',
+        mbCriticalError, MB_OKCANCEL or MB_DEFBUTTON2) <> idOk then Exit;
+      RemovalMode := 'all';
+    end;
+    Result := True;
+  finally
+    Form.Free();
+  end;
+end;
+
+function InitializeUninstall(): Boolean;
 begin
   RemovalMode := 'settings';
   Result := True;
+  { Silent uninstall always keeps SQLite and backups. }
   if not UninstallSilent() then begin
-    Selection := MsgBox(
-      'LKH MCP 제거 방식' + #13#10 + #13#10 +
-      '[예] 프로그램 + 설정 제거 (기본값; SQLite DB/로그/백업 보존)' + #13#10 +
-      '[아니요] 다른 제거 옵션 선택' + #13#10 +
-      '[취소] 중단', mbConfirmation, MB_YESNOCANCEL or MB_DEFBUTTON1);
-    if Selection = idCancel then begin Result := False; Exit; end;
-    if Selection = idNo then begin
-      Selection := MsgBox(
-        '[예] 프로그램만 제거 (설정 및 SQLite DB 보존)' + #13#10 +
-        '[아니요] 모든 앱 데이터 제거 (SQLite 포함)' + #13#10 +
-        '[취소] 중단', mbConfirmation, MB_YESNOCANCEL or MB_DEFBUTTON1);
-      if Selection = idCancel then begin Result := False; Exit; end;
-      if Selection = idYes then
-        RemovalMode := 'program'
-      else begin
-        RemovalMode := 'all';
-        if MsgBox('전체 삭제: ProgramData의 LKH-MCP 설정/SQLite/로그/백업이 삭제됩니다.' + #13#10 +
-          'SQLite는 별도 ACL 보호 폴더에 먼저 검증 백업하고 그 백업은 보존합니다.' + #13#10 +
-          '계속하시겠습니까?',
-          mbCriticalError, MB_YESNO or MB_DEFBUTTON2) <> idYes then begin
-          Result := False; Exit;
-        end;
-        if MsgBox('최종 확인: 모든 LKH-MCP 데이터의 삭제를 승인합니까?',
-          mbCriticalError, MB_YESNO or MB_DEFBUTTON2) <> idYes then begin
-          Result := False; Exit;
-        end;
-      end;
+    if not SelectUninstallMode() then begin
+      Result := False;
+      Exit;
     end;
   end;
   if not RunNativeRemoval('verify') then begin

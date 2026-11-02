@@ -71,3 +71,5 @@ are deferred until the user can grant a test/deployment window. Do not mark Phas
 - Pig tray right-click context menu label simplified to one **종료** action (Agent + server), with no separate tray-only exit. The previous server-only API remains available from the authenticated Admin UI; tray does not bypass CSRF.
 
 - Native tray silent-stop repair (2026-11-02): `CoInitialize`/`CoUninitialize` on worker scheduler COM calls, foreground shutdown error dialog, confirmed Agent task stop and Windows SCM `STOPPED` before tray closes. Windows real-host UAC/SCM E2E remains unverified; CI/mocks cover failure paths.
+
+- Native Uninstaller choice UX: checkbox `완전 삭제` off by default (`settings` with SQLite/WAL/logs/backups retained), checking it requires explicit OK/Cancel before `all`; fixed LKH SCM service and owned Scheduler tasks are removed in both modes, subject to ownership/idle-state safety checks. Windows Inno Setup compile and real host uninstall E2E are separate release gates.
