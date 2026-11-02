@@ -25,6 +25,7 @@ type Event = { seq: number; at: number; type: string; phase: string };
 export function CodexEventStream({ taskId }: { taskId: string }) {
   const [open, setOpen] = useState(false);
   const [events, setEvents] = useState<Event[]>([]);
+  const [phaseFilter, setPhaseFilter] = useState("all");
   const [cursor, setCursor] = useState(0);
   const [error, setError] = useState("");
   useEffect(() => {
@@ -55,8 +56,11 @@ export function CodexEventStream({ taskId }: { taskId: string }) {
     {open && <div>
       <p className="muted">2초 간격 메타데이터 조회 · 명령/프롬프트/출력은 저장하지 않음</p>
       {error && <p className="error" role="alert">{error}</p>}
+      <label>단계 필터 <select value={phaseFilter} onChange={e => setPhaseFilter(e.target.value)}>
+        {["all","codex","git","build","test","graphify","cleanup","unknown"].map(p => <option key={p} value={p}>{p}</option>)}
+      </select></label>
       <ol style={{ maxHeight: 280, overflowY: "auto", fontFamily: "monospace" }}>
-        {events.map(e => <li key={e.seq}>
+        {events.filter(e => phaseFilter === "all" || e.phase === phaseFilter).map(e => <li key={e.seq}>
           {new Date(e.at * 1000).toLocaleTimeString("ko-KR")} · {e.phase} / {e.type}
         </li>)}
       </ol>
@@ -76,6 +80,7 @@ export function InstructionsPanel() {
   const [scopeKey, setScopeKey] = useState("");
   const [body, setBody] = useState("");
   const [versions, setVersions] = useState<Version[]>([]);
+  const [instructionSearch, setInstructionSearch] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -124,12 +129,13 @@ export function InstructionsPanel() {
   return <div className="task-grid">
     <section className="panel">
       <h2>지침 목록</h2>
+      <label>지침 검색 <input value={instructionSearch} onChange={e => setInstructionSearch(e.target.value)} placeholder="이름 / Scope" /></label>
       <p className="muted">Draft는 MCP에 노출되지 않으며 관리자가 발행한 버전만 적용됩니다.</p>
       <button className="button" onClick={() => {
         setSelected(""); setName(""); setScope("global"); setScopeKey(""); setBody(""); setVersions([]);
       }}>새 지침</button>
       <div className="table-wrap"><table><thead><tr><th>이름</th><th>Scope</th><th>버전</th></tr></thead>
-        <tbody>{entries.map(e => <tr key={e.id}><td>
+        <tbody>{entries.filter(e => (e.name + " " + e.scope + " " + e.scope_key).toLowerCase().includes(instructionSearch.toLowerCase())).map(e => <tr key={e.id}><td>
           <button type="button" className="button" onClick={() => void select(e)}>{e.name}</button>
         </td><td>{e.scope}:{e.scope_key}</td><td>
           {e.published_revision ?? "미발행"} / {e.revision}
@@ -162,9 +168,13 @@ export function InstructionsPanel() {
 type Log = { id: number; at: number; category: string; name: string;
   result: string; duration_ms: number; trace_id: string };
 type Bucket = { minute: number; requests: number; errors: number; avg_duration_ms: number };
+type AlertState = { queue: Record<string, number>; alerts: string[];
+  agents: {total: number; online: number}; stale_leases: number };
 export function OperationsPanel() {
   const [logs, setLogs] = useState<Log[]>([]);
+  const [logFilter, setLogFilter] = useState("");
   const [buckets, setBuckets] = useState<Bucket[]>([]);
+  const [alerts, setAlerts] = useState<AlertState | null>(null);
   const [runtime, setRuntime] = useState<{cpu_percent: number; memory_mb: number | null;
     threads: number; uptime_seconds: number} | null>(null);
   const [error, setError] = useState("");
@@ -178,6 +188,7 @@ export function OperationsPanel() {
       setLogs(prev => [...new Map([...prev, ...log.events].map(e => [e.id, e])).values()].slice(-200));
       setCursor(log.cursor);
       setBuckets(metric.buckets); setRuntime(metric.runtime); setError("");
+      void secureApi<AlertState>("/admin/api/operations/alerts").then(setAlerts).catch(() => setAlerts(null));
     } catch (err) { setError((err as Error).message); }
   }, [cursor]);
   useEffect(() => {
@@ -188,6 +199,7 @@ export function OperationsPanel() {
   return <>
     <section className="panel">
       <h2>운영 지표 · 최근 60분</h2>
+      {alerts && <p role="status">대기 {alerts.queue.queued ?? 0}건 · Agent {alerts.agents.online}/{alerts.agents.total} Online · 경고 {alerts.alerts.length ? alerts.alerts.join(", ") : "없음"}</p>}
       {error && <p className="error" role="alert">{error}</p>}
       <p>CPU {runtime?.cpu_percent ?? "—"}% · RSS {runtime?.memory_mb ?? "—"} MB ·
         Threads {runtime?.threads ?? "—"} · Uptime {runtime?.uptime_seconds ?? "—"}초</p>
@@ -212,9 +224,10 @@ export function OperationsPanel() {
     </section>
     <section className="panel">
       <h2>구조화 로그 (메타데이터만)</h2>
+      <label>로그 필터 <input value={logFilter} onChange={e => setLogFilter(e.target.value)} placeholder="도구명 / 카테고리 / Trace ID" /></label>
       <p className="muted">30일 보존 · 프롬프트·명령·인증 토큰·출력 본문 미저장</p>
       <div className="table-wrap"><table><thead><tr><th>시각</th><th>구분</th><th>이름</th><th>결과</th><th>ms</th><th>Trace ID</th></tr></thead>
-        <tbody>{logs.slice().reverse().map(e => <tr key={e.id}>
+        <tbody>{logs.slice().reverse().filter(e => (e.name + " " + e.category + " " + e.result + " " + e.trace_id).toLowerCase().includes(logFilter.toLowerCase())).map(e => <tr key={e.id}>
           <td>{new Date(e.at * 1000).toLocaleString("ko-KR")}</td>
           <td>{e.category}</td><td>{e.name}</td><td>{e.result}</td><td>{e.duration_ms}</td><td title={e.trace_id}>{e.trace_id.slice(0, 10)}</td>
         </tr>)}</tbody>

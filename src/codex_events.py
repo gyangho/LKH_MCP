@@ -65,9 +65,19 @@ def append(task_id: str, agent_id: str, lease: str, events: list[dict]) -> dict:
                 not hmac.compare_digest(row[2], hashlib.sha256(lease.encode()).hexdigest()) or
                 int(time.time()) - row[3] > codex_bridge._LEASE):
             raise PermissionError("Agent lease invalid")
+        if len({seq for seq, _, _ in normalized}) != len(normalized):
+            raise ValueError("Repeated sequence in event batch")
         current = db.execute(
             "SELECT COUNT(*) FROM codex_task_events WHERE task_id=?", (task_id,)).fetchone()[0]
-        if current + len(normalized) > MAX_EVENTS_PER_JOB:
+        existing = set()
+        for seq, kind, phase in normalized:
+            old = db.execute("SELECT event_type,phase FROM codex_task_events WHERE task_id=? AND seq=?",
+                             (task_id, seq)).fetchone()
+            if old:
+                if tuple(old) != (kind, phase):
+                    raise ValueError("Conflicting event sequence replay")
+                existing.add(seq)
+        if current + len(normalized) - len(existing) > MAX_EVENTS_PER_JOB:
             raise ValueError("Task event limit exceeded")
         now = int(time.time())
         db.executemany("""INSERT OR IGNORE INTO codex_task_events
@@ -75,7 +85,7 @@ def append(task_id: str, agent_id: str, lease: str, events: list[dict]) -> dict:
             [(task_id, n, now, kind, phase) for n, kind, phase in normalized])
         db.execute("DELETE FROM codex_task_events WHERE at<?", (now - RETENTION_SECONDS,))
         db.commit()
-        return {"accepted": len(normalized), "task_id": task_id}
+        return {"accepted": len(normalized) - len(existing), "task_id": task_id}
     except BaseException:
         db.rollback()
         raise

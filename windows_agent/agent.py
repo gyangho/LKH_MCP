@@ -474,22 +474,22 @@ def main() -> None:
                             "projects": projects}, current_token())
                 job = response.get("job")
                 if job:
-                    sequence = [0]
-                    def emit(kind: str, phase: str) -> None:
-                        sequence[0] += 1
-                        if sequence[0] > 2000:
-                            return
-                        try:
-                            post_json(base, "/admin/agent/events", {
-                                "task_id": job["id"], "lease": response["lease"],
-                                "agent_id": agent_id, "events": [{
-                                    "seq": sequence[0], "type": kind, "phase": phase
-                                }]
-                            }, current_token(), timeout=5)
-                        except (OSError, ValueError, RuntimeError):
-                            # Event telemetry must never change task execution outcome.
-                            pass
-                    success, report, error, graph = process(job, cfg, event_callback=emit)
+                    from event_outbox import EventOutbox
+                    def send_events(batch: list[dict]) -> None:
+                        post_json(base, "/admin/agent/events", {
+                            "task_id": job["id"], "lease": response["lease"],
+                            "agent_id": agent_id, "events": batch,
+                        }, current_token(), timeout=5)
+                    outbox = EventOutbox(send_events, capacity=128, batch_size=16)
+                    try:
+                        success, report, error, graph = process(
+                            job, cfg, event_callback=outbox.emit)
+                    finally:
+                        outbox.flush(attempts=3)
+                        if outbox.pending or outbox.dropped:
+                            print("Codex event telemetry incomplete: "
+                                  f"pending={outbox.pending}, dropped={outbox.dropped}",
+                                  file=sys.stderr, flush=True)
                     answer = {"id": job["id"], "lease": response["lease"],
                               "agent_id": agent_id, "success": success,
                               "report": report[:16000], "error": error[:2000], "graph_base64": graph}

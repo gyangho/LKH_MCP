@@ -13,17 +13,22 @@ def register_instruction_tools(mcp):
     @mcp.tool()
     def instructions_list() -> dict:
         """List published instruction scopes and versions (never drafts)."""
-        return store.list_entries(published_only=True)
+        return {"instructions": [e for e in store.list_entries(published_only=True)["instructions"] if e["scope"] == "global"]}
 
     @mcp.tool()
     def instructions_get(instruction_id: str) -> dict:
         """Read a published instruction by ID."""
-        return store.get_entry(instruction_id, published_only=True)
+        item = store.get_entry(instruction_id, published_only=True)
+        if item["scope"] != "global":
+            raise PermissionError("Authenticated scope context required")
+        return item
 
     @mcp.tool()
     def instructions_resolve(name: str, project: str = "", agent: str = "", tool: str = "") -> dict:
         """Resolve published instruction with tool > agent > project > global precedence."""
-        return store.resolve(name, project=project, agent=agent, tool=tool)
+        if project or agent or tool:
+            raise PermissionError("Unverified instruction selectors are forbidden")
+        return store.resolve(name)
 
 
 def register_instruction_admin(mcp):
@@ -76,6 +81,9 @@ def register_instruction_admin(mcp):
                 "save": {"id", "revision", "body"},
                 "publish": {"id", "revision"},
                 "rollback": {"id", "revision", "target_revision"},
+                "revoke": {"id", "revision"},
+                "request_review": {"id", "revision"},
+                "approve_review": {"id", "revision"},
             }
             if action not in contracts or set(p) != contracts[action]:
                 raise ValueError("Unsupported instruction action")
@@ -85,6 +93,14 @@ def register_instruction_admin(mcp):
                 result = store.save(p["id"], p["body"], p["revision"], actor)
             elif action == "publish":
                 result = store.publish(p["id"], p["revision"], actor)
+            elif action == "revoke":
+                result = store.revoke(p["id"], p["revision"], actor)
+            elif action == "request_review":
+                from instruction_approvals import request_review
+                result = request_review(p["id"], p["revision"], actor)
+            elif action == "approve_review":
+                from instruction_approvals import approve_review
+                result = approve_review(p["id"], p["revision"], actor)
             else:
                 result = store.rollback(p["id"], p["target_revision"], p["revision"], actor)
             return _private(JSONResponse(result))
@@ -92,5 +108,7 @@ def register_instruction_admin(mcp):
             return _private(_auth_response(exc, request))
         except (ValueError, TypeError, KeyError):
             return _private(JSONResponse({"error": "invalid, duplicate or stale instruction"}, status_code=400))
+        except PermissionError:
+            return _private(JSONResponse({"error": "permission denied"}, status_code=403))
         except __import__("sqlite3").IntegrityError:
             return _private(JSONResponse({"error": "instruction scope already exists"}, status_code=409))

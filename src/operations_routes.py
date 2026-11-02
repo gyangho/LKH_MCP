@@ -34,6 +34,15 @@ def register_operations_routes(mcp):
         except ValueError:
             return _private(JSONResponse({"error": "invalid log query"}, status_code=400))
 
+    @mcp.custom_route("/admin/api/operations/alerts", methods=["GET"])
+    async def alerts(request: Request):
+        try:
+            _verify_access(request)
+            from operations_alerts import snapshot
+            return _private(JSONResponse(snapshot()))
+        except (AdminNotConfigured, AdminUnauthorized) as exc:
+            return _private(_auth_response(exc, request))
+
     @mcp.custom_route("/admin/api/operations/metrics", methods=["GET"])
     async def metrics(request: Request):
         try:
