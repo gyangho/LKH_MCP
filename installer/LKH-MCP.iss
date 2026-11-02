@@ -196,8 +196,8 @@ procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 begin
   if CurUninstallStep = usUninstall then begin
     if not RunNativeRemoval('remove') then begin
-      MsgBox('제거 처리 실패: 일부 서비스/작업이 중지되었을 수 있습니다.' +
-        #13#10 + '프로그램 파일 삭제는 중단합니다. 보존 데이터를 확인하세요.',
+      MsgBox('제거 처리 실패: 일부 서비스/작업이 중지되었을 수 있습니다.' + #13#10 +
+        '프로그램 파일 삭제는 중단합니다. 보존 데이터를 확인하세요.',
         mbCriticalError, MB_OK);
       Abort;
     end;
