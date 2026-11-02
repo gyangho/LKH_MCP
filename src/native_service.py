@@ -66,7 +66,11 @@ def service_main() -> None:
                 )
                 try:
                     while True:
-                        if self.child.poll() is not None:
+                        status = self.child.poll()
+                        if status is not None:
+                            if status == 0:
+                                # Explicit admin-triggered graceful shutdown.
+                                break
                             raise RuntimeError("LKH MCP native server exited unexpectedly")
                         if win32event.WaitForSingleObject(self.stop_event, 500) == win32event.WAIT_OBJECT_0:
                             marker.touch(exist_ok=False)

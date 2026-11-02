@@ -10,7 +10,7 @@ enrollment and SQLite migration are **not production released**.
 | Stage | Files / concrete implementation | Remaining acceptance |
 |---|---|---|
 | I0 | `TRACK_A_I0_BASELINE.md`: Naru/Docker, SQLite WAL, Oracle Thick, Cloudflare/WARP/portproxy, Agent and UIUX inventory | Host/network/Oracle evidence; I0 not fully VERIFIED |
-| I1 | `native_runtime.py`, `native_server.py`, `native_gateway.py`; 127.0.0.1:18080 MCP-only, :18081 Admin-only, route guards; PyInstaller onedir bundle | Windows CLI smoke and 404 route checks; Oracle 11g, UIUX frozen parity and real host still pending |
+| I1 | `native_runtime.py`, `native_server.py`, `native_gateway.py`; 기본 127.0.0.1:8000 MCP-only, :8001 Admin-only (병행 staging은 18080/18081 명시 오버라이드), route guards; PyInstaller onedir bundle | Windows CLI smoke and 404 route checks; Oracle 11g, UIUX frozen parity and real host still pending |
 | I2 | `native_service.py`: distinct SCM host process, child server lifecycle, service stop signal. Installed as `LKH-MCP-Server` under LocalService by Installer | Service install/start/reboot/logoff/recovery/ACL under actual Windows account |
 | I3 | `native_task_control.py`, `native_host_routes.py`, `scripts/install-agent-task.ps1`; fixed task only, authenticated CSRF API, busy guard | Real LocalService task SDDL, Windows Agent repo config, interactive login, restart/stop E2E |
 | I4 | `native_tray.py`, `scripts/generate_icon.py`: same approved Pixel Pig pixels recolored green/pink/gray, separate tray, start/stop via fixed task | Pixel legibility at 16px, notification UI, tray autostart, offline/unknown behavior on host |
@@ -29,7 +29,7 @@ git submodule update --init --recursive
 # Native preview preflight; NO service installation
 .\dist\LKH-MCP-Server\LKH-MCP-Server.exe --check
 
-# Local-only staging DB and both strictly filtered ports
+# Local-only staging DB and separate test ports to avoid existing Naru 8000/8001
 $env:LKH_NATIVE_STATE_DIR = Join-Path $env:TEMP "lkh-native-sandbox"
 $env:MCP_HOST = "127.0.0.1"
 $env:MCP_PORT = "18080"
@@ -40,7 +40,7 @@ $env:LKH_NATIVE_ADMIN_PORT = "18081"
 The staging Native preview is NOT the production Naru MCP. Port 18080
 accepts `/mcp` and `/mcp/` only; 18081 accepts `/admin` + subpaths
 only and exposes `/admin/healthz` for non-sensitive loopback liveness.
-Do not configure Cloudflare to point to the preview.
+Do not configure Cloudflare to point to the preview. Native production-target defaults are 8000/8001, but this sample intentionally overrides them to 18080/18081 to avoid conflict with an existing Naru listener. The Installer's new Agent config targets Admin 8001; existing Agent config is preserved and requires an explicit reviewed migration if still pointing to 18081.
 
 To compile the **unsigned** staging Installer:
 `& "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\LKH-MCP.iss`.
@@ -119,3 +119,14 @@ These code deliverables are checkpoints, not user authorization to deploy.
 - I7 staging now verifies `PRAGMA integrity_check`, row counts, and the **logical SHA-256 of schema/data**. A backup destination is created with same-directory atomic no-replace hard-link, preventing an intervening process from having its file overwritten. Concurrent source modification fails closed on digest mismatch. An approved, consistent Docker export is still required.
 - GitHub-hosted Windows Runner ≠ the target PC. A signed Installer, Oracle Thick/UI UX frozen feature parity, login/logout/reboot, Windows accounts/ACL on the corporate host, silent upgrade/uninstall, and actual Naru/Cloudflare cutover and rollback are **NOT VERIFIED**. The code remains staging-only; no production transition was performed.
 
+
+
+## Native same-PC Naru replacement / Pixel Pig UI update (2026-11-02)
+
+- Native loopback defaults: MCP `127.0.0.1:8000/mcp`, Admin `127.0.0.1:8001/admin`. They **reuse the existing Cloudflare destination ports only after Naru/old Docker port listeners are stopped**. Both route guards remain separate; never bind the combined app on `0.0.0.0`.
+- Existing Naru container/port proxy may still own the sockets; Native must fail the bind in that case. This software does **not** stop Naru, edit Cloudflare, remove data, or change Windows firewall rules.
+- Installer initializes `ADMIN_PUBLIC_ORIGIN=http://127.0.0.1:8001` for **local** administration. Remote administration under a Cloudflare hostname requires a separately reviewed origin/host/cookie/Access policy; MCP 8000 alone may be routed through Cloudflare. Do not expose 8001 without that review.
+- Pixel Pig icon: `branding/pig-terminal.png` stays full color when the server responds and Agent has a fresh authenticated heartbeat. Server online + Agent offline → true monochrome; server unavailable → dim gray. Color no longer indicates Agent busy state.
+- Web admin: original Pig artwork, shared rectangular pixel-theme fields and text area, fixed form/layout alignment. Operations logs/metrics/alerts have **no automatic polling** while being reviewed; explicit manual refresh buttons and fixed-height scroll table. Global status refresh is suspended while editing instructions or reading operations.
+- Shutdown UI: session + Origin/Host/CSRF-protected Native-only `POST /admin/api/host/shutdown/{server,both}` with exact confirmation body, active-job refusal, 5-second rate limit. `both` stops the fixed Agent task first; the Native server returns acknowledgement, then drains gateways and exits. Windows SCM supervisor treats zero-exit as a deliberate stop. This does not shut down Naru or unrelated services.
+- New staging CI tests verify port isolation, shutdown conditions, and Pig palette. Signed Installer, real Cloudflare/WARP routing and corporate Windows Agent/SCM shutdown remain host-specific acceptance tests.

@@ -38,7 +38,7 @@ Source: "..\windows_agent\config.example.json"; DestDir: "{commonappdata}\LKH-MC
 
 [Icons]
 Name: "{group}\LKH MCP Tray"; Filename: "{app}\LKH-MCP-Tray\LKH-MCP-Tray.exe"
-Name: "{group}\Open LKH MCP Admin"; Filename: "http://127.0.0.1:18081/admin"
+Name: "{group}\Open LKH MCP Admin"; Filename: "http://127.0.0.1:8001/admin"
 Name: "{group}\Uninstall LKH MCP"; Filename: "{uninstallexe}"
 
 [Run]

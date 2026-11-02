@@ -2,6 +2,8 @@ FROM node:22-alpine AS ui_build
 WORKDIR /frontend
 COPY frontend/package.json frontend/tsconfig.json frontend/vite.config.ts frontend/index.html ./
 COPY frontend/src ./src
+# Keep the approved original Pixel Pig asset available for the Vite import.
+COPY branding/pig-terminal.png /branding/pig-terminal.png
 RUN npm install --no-audit --no-fund && npm run build
 
 FROM python:3.12-slim-bookworm

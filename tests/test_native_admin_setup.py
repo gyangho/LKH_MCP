@@ -21,7 +21,7 @@ class AdminSetupTests(unittest.TestCase):
         data = json.loads(p.read_text("utf-8"))
         self.assertNotIn("ExampleLongPrivatePassword99!", p.read_text("utf-8"))
         self.assertTrue(data["ADMIN_PASSWORD_HASH"].startswith("pbkdf2_sha256$"))
-        self.assertEqual(data["ADMIN_PUBLIC_ORIGIN"], "http://127.0.0.1:18081")
+        self.assertEqual(data["ADMIN_PUBLIC_ORIGIN"], "http://127.0.0.1:8001")
         self.assertTrue(initialize(root=self.root)["unchanged"])
         self.assertEqual(json.loads(p.read_text("utf-8")), data)
 

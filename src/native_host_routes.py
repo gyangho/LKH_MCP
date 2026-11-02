@@ -56,6 +56,57 @@ def register_native_host_routes(mcp):
             "server": "running",
         }))
 
+    @mcp.custom_route("/admin/api/host/shutdown/{target}", methods=["POST"])
+    async def shutdown(request: Request):
+        # Only the native process may terminate itself. Never execute arbitrary
+        # commands or control Docker/Naru from an administrative HTTP request.
+        import os
+        from native_shutdown import schedule_shutdown
+        if os.getenv("LKH_NATIVE_MODE") != "1":
+            return _private(JSONResponse({"error": "native-only endpoint"}, status_code=404))
+        try:
+            actor = verify_admin_session(request)
+        except (AdminNotConfigured, AdminUnauthorized) as exc:
+            return _private(auth_response(exc, request))
+        if not valid_csrf(request):
+            return _private(JSONResponse({"error": "CSRF/origin failure"}, status_code=403))
+        target = request.path_params.get("target", "")
+        expected = {"server": "STOP_SERVER", "both": "STOP_BOTH"}
+        if target not in expected:
+            return _private(JSONResponse({"error": "unknown shutdown target"}, status_code=404))
+        raw = await request.body()
+        if len(raw) > 80:
+            return _private(JSONResponse({"error": "invalid confirmation"}, status_code=400))
+        try:
+            import json
+            body = json.loads(raw)
+        except (ValueError, UnicodeDecodeError):
+            body = None
+        if body != {"confirm": expected[target]}:
+            return _private(JSONResponse({"error": "explicit confirmation required"}, status_code=400))
+        global _LAST_ACTION
+        with _LOCK:
+            if time.monotonic() - _LAST_ACTION < 5:
+                return _private(JSONResponse({"error": "rate limited"}, status_code=429))
+            try:
+                snapshot = agents_snapshot()
+                if any(a.get("busy") for a in snapshot["agents"]):
+                    return _private(JSONResponse({"error": "active Codex task; cancel first"}, status_code=409))
+                if target == "both":
+                    agent_state = task_state()
+                    if agent_state == "running":
+                        control_agent("stop", busy=False)
+                    elif agent_state not in ("ready", "disabled"):
+                        raise RuntimeError("Agent task state must be known before combined shutdown")
+                schedule_shutdown()
+            except (PermissionError, OSError, RuntimeError, ValueError):
+                return _private(JSONResponse({"error": "native shutdown unavailable or Agent task denied"}, status_code=503))
+            _LAST_ACTION = time.monotonic()
+        from runtime_state import _record
+        _record("native_shutdown", "success", detail="target=" + target, actor=actor)
+        return _private(JSONResponse({"accepted": True, "target": target,
+                                      "note": "Native service will stop after this response"}))
+
     @mcp.custom_route("/admin/api/host/agent/{action}", methods=["POST"])
     async def action(request: Request):
         global _LAST_ACTION

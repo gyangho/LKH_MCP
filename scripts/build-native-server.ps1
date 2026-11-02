@@ -41,5 +41,5 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "Native bundle preflight failed" }
     Write-Host "I1 preview built and asset-checked: $exe"
     Write-Host "NOT validated: SCM Service, dual-port isolation, Oracle 11g, UIUX external Python."
-    Write-Host "Default preview bind: 127.0.0.1:18080 (does not replace Docker)."
+    Write-Host "Default preview bind: 127.0.0.1:8000 (does not replace Docker)."
 } finally { Pop-Location }

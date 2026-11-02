@@ -40,7 +40,7 @@ Windows SCM         사용자 로그인     Windows Task Scheduler
 
 - 부팅 후 로그인 없이 MCP Service가 살아야 하고, 트레이만 로그인 시 표시한다. **별도 상주 Supervisor를 만들지 않는다.**
 - Service에서 사전 등록된 이름의 스케줄러 작업만 제어. 원격 arbitrary command/shell 금지.
-- 초록 Pixel Pig = 최근 인증된 heartbeat로 Agent Online, 핑크 = 서버 정상·Agent Offline, 회색 = 서버/상태 판별 불가. Busy/Error는 텍스트/경고로 구분. 시각 원본은 `branding/pig-terminal.png`.
+- 원본 컬러 Pixel Pig = 최근 인증된 heartbeat로 Agent Online, 흑백 = 서버 정상·Agent Offline, 회색 = 서버/상태 판별 불가. Busy/Error는 텍스트/경고로 구분. 시각 원본은 `branding/pig-terminal.png`.
 - 저장 위치 목표: `%ProgramFiles%\LKH MCP\` 바이너리(사용자 쓰기 불가), `%ProgramData%\LKH-MCP\` DB/설정/로그/백업(서비스 ACL). Codex 로그인/기기 개인키는 사용자/OS 보호 저장소에 분리.
 - 한 PC 내 인증은 Windows Named Pipe ACL·OS identity + CNG/DPAPI 키 활용을 검토. 원격 Agent는 범위 밖.
 - 서버 라우팅은 8000 MCP-only, 8001 Admin-only와 동등한 방화벽/정확한 경로 필터를 실기에서 증명. 필요시 별도 listener/reverse proxy 유지하되 인터넷 공개 금지.
