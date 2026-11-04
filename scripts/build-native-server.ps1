@@ -20,6 +20,13 @@ try {
         & $Python scripts/bump-native-version.py
         if ($LASTEXITCODE -ne 0) { throw "Native version update failed" }
     }
+    $skills = "vendor\mattpocock-skills\.lkh-pinned-revision"
+    if (-not (Test-Path -LiteralPath $skills -PathType Leaf)) {
+        throw "Server engineering skills missing; run scripts/install-matt-skills.ps1 first"
+    }
+    if ((Get-Content -LiteralPath $skills -Raw).Trim() -ne "4ae2317ddb22b046e26455e4f9c9b3aaaf62212d") {
+        throw "Mismatched engineering skills revision"
+    }
     Push-Location frontend
     try {
         & npm ci --no-audit --no-fund
@@ -38,6 +45,8 @@ try {
         --collect-submodules mcp.server --collect-submodules oracledb `
         --hidden-import win32com.client --hidden-import win32crypt `
         --add-data "frontend/dist;web/dist" `
+        --add-data "vendor/ui-ux-pro-max-skill;vendor/ui-ux-pro-max-skill" `
+        --add-data "vendor/mattpocock-skills;vendor/mattpocock-skills" `
         src/native_server.py
     if ($LASTEXITCODE -ne 0) { throw "PyInstaller failed" }
     $exe = "dist\LKH-MCP-Server\LKH-MCP-Server.exe"

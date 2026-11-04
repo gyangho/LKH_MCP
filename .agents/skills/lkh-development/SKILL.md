@@ -16,6 +16,13 @@ Scope: repository `gyangho/LKH_MCP`. Work on `refac` unless the user explicitly 
 - Never bypass the Windows Codex workspace sandbox or modify the canonical checkout while verifying a task.
 - MCP and Admin must remain separate routes, including on the Native loopback staging listeners.
 
+## Central engineering workflow
+
+- When writing or reviewing code, consult the centrally served LKH MCP engineering_workflow and engineering_skill_get tools. The Matt Pocock skill package is installed on the MCP server only.
+- Respect existing user/project rules above upstream instructions, especially separate explicit commit and push approval.
+- Windows Codex verify/diagnose/fix jobs must receive a pinned server-hosted procedure. Never treat a missing skill as successful implementation.
+- Source and operational deployment are separate; see docs/ENGINEERING_SKILLS.md.
+
 ## Preflight
 
 1. Read the most recent commit, active branch, `docs/ROADMAP.md` and `docs/VERIFICATION.md`.

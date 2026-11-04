@@ -177,3 +177,10 @@ Repository DB/관리자 API/UI에 agent_id/local_path와 revision 기반 연결 
 ### Service activation preparation 오류 후속 수정
 
 실제 설치 상태 JSON은 installing/version 0.0.2였고 서비스 registry ImagePath는 해당 설치의 서비스 EXE와 일치했으며 StartType은 3(수동)이었다. 현재 오류창은 하위 PowerShell 오류를 숨겨 실제 실패 작업은 확정하지 못했다. 상태 파일 File.Replace의 null 백업 인수를 명시적인 고유 백업 경로로 변경하고 이미 수동 시작인 서비스의 중복 설정을 생략했다. 각 phase에서 작업 단계·안전한 오류 유형/식별자·HRESULT·해당 시 Windows 오류 코드를 logs/installer-<phase>.json에 남기고, 실패 정리가 원래 오류를 덮어쓰지 않도록 구분했다. 설치 상태/registry 읽기만 수행했으며 테스트·빌드·설치·서비스 조작은 하지 않았다.
+## 2026-11-04 서버 중앙형 개발 스킬 (Matt Pocock)
+
+- 개발 브랜치 `codex/feature/mcp-central-skills-20261104`, upstream `mattpocock/skills@4ae2317ddb22b046e26455e4f9c9b3aaaf62212d`. 클라이언트별 플러그인 설치 없이 서버에만 pinned 자료를 둔다.
+- [Python CI](https://github.com/gyangho/LKH_MCP/actions/runs/41811191421) 성공: Python compileall, 단위·회귀 테스트 **187개 PASS**, 프런트엔드 빌드 성공. 통합 테스트에는 등록/경로 제한/우선 정책/큐 자동 주입/미설치 시 큐 보류/구버전 Agent 거부/Windows prompt 전달이 포함된다.
+- [Windows Native CI](https://github.com/gyangho/LKH_MCP/actions/runs/41811191728) 성공: pinned upstream 서버 설치, PowerShell 구문 검사, Native 테스트 **72개 PASS**, unsigned 실행 파일 번들/설치기 빌드, loopback 포트 분리·DPAPI·SCM·작업 스케줄러·복구 테스트 PASS. 실제 Native 서버로 MCP 조회 스모크 실행: `CENTRAL_MCP_SKILLS_SMOKE_OK 27 4ae2317ddb22b046e26455e4f9c9b3aaaf62212d`.
+- CI runner의 격리된 Windows 가상 머신 기준이며 운영 MCP 서버, Portal 실제 연결, 실제 사용자 Codex CLI의 수락 테스트나 배포 성공을 증명하지 않는다. 서버/Agent를 운영 전환하거나 생산 DB/라우팅을 변경하지 않았다.
+- 실제 단계별 검증과 권한 제약은 [중앙 개발 스킬](ENGINEERING_SKILLS.md)의 수락 테스트 절차를 따를 것.

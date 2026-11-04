@@ -221,7 +221,8 @@ class PreparationTests(unittest.TestCase):
         config = {"verification_environments": {"project": self.profile},
                   "projects": {"project": {"repository": "example/project", "path": str(self.root)}}}
         job = {"project": "project", "repository": "example/project", "branch": "main",
-               "expected_sha": "a" * 40, "kind": "verify"}
+               "expected_sha": "a" * 40, "kind": "verify",
+               "engineering_guidance": "Pinned test guidance"}
         with patch.object(agent, "safe_pull") as pull, patch.object(agent, "codex_task") as task:
             ok, report, error, _ = agent.process(job, config)
         self.assertFalse(ok)
@@ -236,6 +237,7 @@ class PreparationTests(unittest.TestCase):
                   "projects": {"project": {"repository": "example/project", "path": str(self.root)}}}
         job = {"project": "project", "repository": "example/project", "branch": "main",
                "expected_sha": "a" * 40, "kind": "verify", "instructions": "run tests",
+               "engineering_guidance": "Pinned test guidance",
                "verification_environments": {"project": {"path": "attacker-path"}}}
         with patch.object(agent, "safe_pull", return_value="a" * 40), \
                 patch.object(agent, "git", return_value="a" * 40), \
@@ -274,7 +276,8 @@ class AgentPreparationTests(unittest.TestCase):
         self.prepare.return_value = manifest, {"PATH": "sanitized", "GRADLE_USER_HOME": "worktree-cache"}
         self.jsonl.return_value = json.dumps({"passed": True, "summary": "tests passed"})
         ok, _ = agent.codex_task(Path("canonical"), "a" * 40, "verify", "run tests",
-                                 Mock(), preparation=self.profile)
+                                 Mock(), preparation=self.profile,
+                                 workflow_guidance="Pinned test guidance")
         self.assertTrue(ok)
         prompt = self.jsonl.call_args.args[1]
         self.assertIn("a" * 40, prompt)
@@ -284,7 +287,8 @@ class AgentPreparationTests(unittest.TestCase):
 
     def test_unconfigured_project_retains_existing_verification_flow(self):
         self.codex.return_value = '{"passed":true,"summary":"legacy tests"}'
-        ok, _ = agent.codex_task(Path("canonical"), "a" * 40, "verify", "run tests")
+        ok, _ = agent.codex_task(Path("canonical"), "a" * 40, "verify", "run tests",
+                                 workflow_guidance="Pinned test guidance")
         self.assertTrue(ok)
         self.prepare.assert_not_called()
         self.codex.assert_called_once()

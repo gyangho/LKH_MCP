@@ -16,6 +16,10 @@
 
 Bootstrap은 `src/settings_store.py`에 정의된 비밀/인증 키만 허용하며 각 값은 문자열이어야 한다. 읽은 키는 같은 이름의 환경변수를 덮어쓴다. 일반 설정을 bootstrap에 넣으면 초기화가 실패한다. 파일이 없으면 건너뛰지만 관리자 로그인이나 Oracle 등은 필요한 자격증명이 없으면 사용할 수 없다. 비밀값이나 실제 파일 내용은 문서·로그·Git에 넣지 않는다.
 
+## 중앙 개발 스킬 준비 (서버 전용)
+
+MCP 서버/빌드 호스트에서 Windows는 `./scripts/install-matt-skills.ps1`, Linux는 `bash scripts/install-matt-skills.sh`를 한 번 실행해 `vendor/mattpocock-skills`에 upstream pinned Markdown을 설치한다. 별도 Codex/ChatGPT 클라이언트 플러그인은 설치하지 않는다. Native 빌드 시 해당 디렉터리를 번들에 포함하고 버전을 검사한다. 기존 운영 MCP 서버와 Windows Agent는 별도 승인 없이 재시작/교체하지 않는다. 자세한 내용은 [중앙 개발 스킬](ENGINEERING_SKILLS.md)을 참조한다.
+
 ## Windows Native 빌드와 설치
 
 Windows, Python 3.11+, Node.js/npm 22+ 및 설치기 컴파일용 Inno Setup 6이 필요하다. 공개 스킬 원본은 설치할 때 내려받으므로 Native 빌드에 Git submodule 초기화는 필요하지 않다. 아래는 빌드만 하며 서비스 설치나 운영 전환을 수행하지 않는다. Python은 실행 파일의 절대 경로를 전달한다. 빌드 스크립트는 해당 Python 환경에 pip 패키지를 설치하고 `build`/`dist`, 프런트엔드 산출물을 갱신한다.

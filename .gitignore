@@ -69,5 +69,6 @@ Desktop.ini
 /windows_agent/config.json
 frontend/node_modules/
 frontend/dist/
+/vendor/mattpocock-skills/
 /compose.override.yaml
 /data/

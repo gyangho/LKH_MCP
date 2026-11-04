@@ -223,12 +223,22 @@ def claim(agent_id: str, projects: list[str]) -> dict:
             conn.execute("UPDATE codex_agent_jobs SET state='cancelled',finished_at=?,error='Repository approval changed' WHERE id=?", (now, row["id"]))
             conn.execute("COMMIT")
             return {"job": None}
+        job = {k: row[k] for k in ("id", "project", "repository", "branch", "expected_sha", "kind", "instructions")}
+        if job["kind"] in {"verify", "diagnose", "fix"}:
+            try:
+                from engineering_skills import agent_guidance
+                job["engineering_guidance"] = agent_guidance(job["kind"])
+                if not job["engineering_guidance"]:
+                    raise RuntimeError("Empty engineering guidance")
+            except (OSError, ValueError, RuntimeError):
+                # Fail closed. No lease or quota consumed, and the job remains queued.
+                conn.execute("COMMIT")
+                return {"job": None, "reason": "engineering_skills_unavailable"}
         lease = secrets.token_urlsafe(32)
         conn.execute("""UPDATE codex_agent_jobs SET state='running',claimed_at=?,agent_id=?,lease_token_hash=?
                         WHERE id=? AND state='queued'""",
                      (now, agent_id, hashlib.sha256(lease.encode()).hexdigest(), row["id"]))
         conn.execute("COMMIT")
-        job = {k: row[k] for k in ("id", "project", "repository", "branch", "expected_sha", "kind", "instructions")}
         if assigned[row["project"]][0]:
             job["execution"] = {"agent_id": assigned[row["project"]][0], "path": assigned[row["project"]][1]}
         return {"job": job, "lease": lease, "deadline_seconds": _LEASE}

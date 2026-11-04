@@ -118,3 +118,9 @@ SCM에서 서버 서비스 STOPPED 확인 시 트레이 자동 종료를 추가�
 Repository에 실행 Agent/로컬 경로와 비동기 연결 확인을 추가하고 해당 Agent로 작업을 라우팅하도록 수정했다. 공개 스킬 원본은 설치 시 GitHub latest 정식 release의 커밋에서 다운로드하며, Python 런타임은 설치기에 포함한다. Graphify는 사용자별 설치 없이 Agent가 관리 런타임으로 로컬 AST 분석을 수행한다. 현재 코드는 미빌드·미설치·미검증이다.
 
 Native 진입점은 LKH MCP 실행 시 서버 시작 후 트레이 표시로 통합했다. 서버 중지 시 트레이 자동 종료를 유지하고, 설치 실패/미완료 버전의 기동을 gate로 차단한다. 빌드마다 patch 버전을 자동 증가시키되 suite 전체에서는 한 번만 증가한다. 구현 상태이며 테스트·빌드·실설치는 사용자 요청으로 실행하지 않았다.
+## 2026-11-04 중앙 엔지니어링 스킬 통합
+
+- **IMPLEMENTED(CI):** Matt Pocock upstream commit `4ae2317d`를 LKH MCP 서버에만 버전 고정으로 설치하는 Windows/Linux 스크립트와 읽기 전용 MCP 스킬 조회, 자동 작업별 흐름 선별.
+- **IMPLEMENTED(CI):** Windows Agent verify/diagnose/fix 작업에 서버 제공 스킬 문서 자동 주입. 버전 1 프로토콜이 없는 Agent와 스킬 미설치 상황은 fail closed. 원본 커밋·push 자동 지시보다 사용자 승인 정책 우선.
+- **CI 검증:** [Python 187 PASS](https://github.com/gyangho/LKH_MCP/actions/runs/41811191421), [Windows Native 72 PASS + 라이브 MCP 스모크(27개 스킬) + unsigned Installer](https://github.com/gyangho/LKH_MCP/actions/runs/41811191728).
+- **VERIFIED(Windows E2E) / RELEASED(운영): 미완료.** 실제 LKH MCP 서비스 반영·고객 Windows Agent 업데이트·Cloudflare 연결·Codex E2E는 별도 승인과 실환경 검증 필요. 사용자의 staging 수락 테스트 전까지 운영 반영으로 표시하지 않는다.

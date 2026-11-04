@@ -101,8 +101,8 @@ def register_agent_routes(mcp: Any) -> None:
             if not 1 <= len(raw) <= 4096:
                 raise ValueError("Invalid body length")
             data = json.loads(raw)
-            if not isinstance(data, dict) or set(data) != {"agent_id", "projects"}:
-                raise ValueError("Invalid claim")
+            if not isinstance(data, dict) or set(data) != {"agent_id", "projects", "engineering_skills_version"} or type(data["engineering_skills_version"]) is not int or data["engineering_skills_version"] != 1:
+                raise ValueError("Unsupported Windows Agent engineering skills protocol")
             result = claim(data["agent_id"], data["projects"])
             return JSONResponse(result, headers={"Cache-Control": "no-store"})
         except PermissionError:

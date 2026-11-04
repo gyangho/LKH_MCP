@@ -4,7 +4,7 @@ Windows 중심 MCP/관리 서버. Windows Native Service·Agent·Tray 및 unsign
 
 ## 기능 및 실행 상태
 
-MCP와 React 관리자, Oracle 조회, SQLite 설정/작업 큐, Codex Agent 및 이벤트, 지침 관리, 로그·지표를 제공한다. Native 서버·서비스·트레이·설치기 및 같은 PC의 DPAPI 기반 Agent 등록이 구현되어 있으나 실제 Windows 환경과 운영 전환의 검증 상태는 각 증빙 문서를 확인한다.
+MCP와 React 관리자, Oracle 조회, SQLite 설정/작업 큐, Codex Agent 및 이벤트, 지침 관리, 로그·지표, 서버 중앙 관리형 개발 스킬 조회를 제공한다. Native 서버·서비스·트레이·설치기 및 같은 PC의 DPAPI 기반 Agent 등록이 구현되어 있으나 실제 Windows 환경과 운영 전환의 검증 상태는 각 증빙 문서를 확인한다.
 
 
 ## 공식 문서
@@ -20,6 +20,8 @@ MCP와 React 관리자, Oracle 조회, SQLite 설정/작업 큐, Codex Agent 및
 - `requirements/`: Python 런타임·빌드·Windows 의존성
 - `tests/`, `docs/`: 회귀 테스트와 문서
 - `contracts/`: 관리자 API의 기계 판독 계약
+
+개발 스킬을 사용하려면 클라이언트가 아니라 **MCP 서버/빌드 호스트**에서만 `scripts/install-matt-skills.ps1`(Windows) 또는 `scripts/install-matt-skills.sh`(Linux)를 실행한다. 자세한 내용은 [중앙 개발 스킬](docs/ENGINEERING_SKILLS.md) 참고.
 
 ## 로컬 검증
 

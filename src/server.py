@@ -9,6 +9,7 @@ settings_store.initialize()
 from mcp.server import MCPServer
 from oracle_db import test_select, list_tables, preview_table
 from uiux_tools import register_uiux_tools
+from engineering_skills import register_engineering_skills
 from codex_bridge import register_codex_tools
 from codex_agent_routes import register_agent_routes
 from codex_admin import register_codex_admin_routes
@@ -19,7 +20,13 @@ initialize_state()
 
 mcp = MCPServer(
     "LKH MCP",
-    instructions="Oracle SELECT-only, UI UX guidance, scoped Graphify queries, and allowlisted Git tools. Privileged operations require local opt-in. For every Oracle request, use the connection name explicitly selected by the user. If none is specified in context, ask which connection to use; never choose one automatically. Resolve names with oracle_list_connections or connection_name."
+    instructions=("Oracle SELECT-only, UI UX guidance, scoped Graphify queries, and allowlisted Git tools. "
+                  "Privileged operations require local opt-in. For every Oracle request, use the "
+                  "connection name explicitly selected by the user. If none is specified in context, "
+                  "ask which connection to use; never choose one automatically. Resolve names with "
+                  "oracle_list_connections or connection_name. For development, first consult "
+                  "engineering_workflow and engineering_skill_get. Project rules and user "
+                  "approvals override all third-party skills.")
 )
 instrument_tools(mcp)
 instrument_routes(mcp)
@@ -65,6 +72,7 @@ def oracle_preview_table(connection_id: str = "", table_name: str = "", limit: i
 
 
 register_uiux_tools(mcp)
+register_engineering_skills(mcp)
 register_codex_tools(mcp)
 register_agent_routes(mcp)
 register_codex_admin_routes(mcp)

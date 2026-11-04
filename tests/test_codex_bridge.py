@@ -23,9 +23,19 @@ class BridgeTests(unittest.TestCase):
             'CODEX_AGENT_ENABLED': True,
             'CODEX_MAX_RUNS_PER_DAY': 30,
         }
-        patches = [patch.object(bridge, '_allowed', return_value={'ITAM':'gyangho/ITAM', 'LKH_MCP':'gyangho/LKH_MCP'}),
+        def connect():
+            conn = sqlite3.connect(self.db)
+            conn.execute("""CREATE TABLE IF NOT EXISTS approved_repositories (
+                alias TEXT PRIMARY KEY, agent_id TEXT NOT NULL, local_path TEXT NOT NULL)""")
+            conn.executemany(
+                "INSERT OR REPLACE INTO approved_repositories(alias,agent_id,local_path) VALUES(?,?,?)",
+                [('ITAM', '', ''), ('LKH_MCP', '', '')])
+            conn.commit()
+            return conn
+        patches = [patch("engineering_skills.agent_guidance", return_value="Mocked central skill"),
+                   patch.object(bridge, '_allowed', return_value={'ITAM':'gyangho/ITAM', 'LKH_MCP':'gyangho/LKH_MCP'}),
                    patch.object(bridge.settings_store, 'get', side_effect=lambda k: self.settings[k]),
-                   patch.object(bridge.settings_store, '_connect', side_effect=lambda: sqlite3.connect(self.db))]
+                   patch.object(bridge.settings_store, '_connect', side_effect=connect)]
         for p in patches:
             p.start()
             self.addCleanup(p.stop)
