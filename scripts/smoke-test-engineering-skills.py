@@ -8,7 +8,7 @@ EXPECTED = "4ae2317ddb22b046e26455e4f9c9b3aaaf62212d"
 
 
 def unpack(response):
-    if response.isError:
+    if response.is_error:
         raise RuntimeError("MCP tool call failed")
     for item in response.content:
         body = getattr(item, "text", None)
