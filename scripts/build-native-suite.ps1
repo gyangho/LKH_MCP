@@ -3,14 +3,19 @@
 param([string]$Python = "python")
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
+$Python = (Get-Command $Python -ErrorAction Stop).Source
+New-Item -ItemType Directory -Path (Join-Path $root 'dist') -Force | Out-Null
+$buildLock = [IO.File]::Open((Join-Path $root 'dist\.native-build.lock'), [IO.FileMode]::OpenOrCreate, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)
 Push-Location $root
 try {
-    & .\scripts\build-native-server.ps1 -Python $Python
+    & $Python scripts/bump-native-version.py
+    if ($LASTEXITCODE -ne 0) { throw "Native version update failed" }
+    & .\scripts\build-native-server.ps1 -Python $Python -SkipVersionBump
     if ($LASTEXITCODE -ne 0) { throw "Server build failed" }
     & $Python -m pip install -r requirements/windows.txt
     if ($LASTEXITCODE -ne 0) { throw "Native Windows dependencies unavailable" }
     $base = @("--noconfirm", "--clean", "--onedir", "--paths", "src",
-              "--hidden-import", "win32timezone")
+              "--hidden-import", "win32timezone", "--version-file", "scripts/windows-version.txt")
     & $Python -m PyInstaller @base --console --name LKH-MCP-Service `
         --collect-submodules win32com src/native_service.py
     if ($LASTEXITCODE -ne 0) { throw "Service build failed" }
@@ -29,6 +34,8 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "Admin bootstrap build failed" }
     & $Python -m PyInstaller @base --console --name LKH-MCP-DB-Backup src/native_uninstall_backup.py
     if ($LASTEXITCODE -ne 0) { throw "SQLite recovery helper build failed" }
+    & $Python scripts/prepare-skill-runtime.py
+    if ($LASTEXITCODE -ne 0) { throw "Skill Python runtime preparation failed" }
     foreach ($name in @("LKH-MCP-Admin-Setup", "LKH-MCP-Server", "LKH-MCP-Service", "LKH-MCP-Tray",
                          "LKH-Codex-Agent", "LKH-MCP-Enroll", "LKH-MCP-DB-Backup")) {
         if (-not (Test-Path "dist\$name\$name.exe")) {
@@ -36,4 +43,4 @@ try {
         }
     }
     Write-Host "Unsigned suite completed. Install/SCM/ACL/Oracle parity NOT verified."
-} finally { Pop-Location }
+} finally { Pop-Location; $buildLock.Dispose() }

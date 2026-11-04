@@ -87,6 +87,9 @@ def initialize() -> None:
                 if not isinstance(value, str) or len(value) > 4096:
                     raise ValueError("Invalid bootstrap value")
                 os.environ[key] = value
+        if os.getenv("LKH_NATIVE_MODE") == "1":
+            from native_network import admin_base
+            os.environ["ADMIN_PUBLIC_ORIGIN"] = admin_base()
         conn = _connect()
         try:
             for key, (_, _, _, default, _) in FIELDS.items():

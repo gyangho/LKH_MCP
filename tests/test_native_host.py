@@ -51,10 +51,10 @@ class TaskTests(unittest.TestCase):
         with patch.object(task, "_windows_only"), patch.object(
             task.subprocess, "run", return_value=MagicMock(returncode=0)
         ) as run:
-            result = task.control_agent("start")
+            result = task.control_agent("stop")
         self.assertTrue(result["accepted"])
         args, kw = run.call_args
-        self.assertEqual(args[0], ["schtasks.exe", "/run", "/tn", r"\LKH-Codex-Agent"])
+        self.assertEqual(args[0], ["schtasks.exe", "/end", "/tn", r"\LKH-Codex-Agent"])
         self.assertIs(kw["shell"], False)
 
     def test_busy_tasks_cannot_be_stopped(self):
@@ -71,7 +71,7 @@ class TaskTests(unittest.TestCase):
         with patch.object(task, "_windows_only"), patch.object(
             task.subprocess, "run", return_value=MagicMock(returncode=1)
         ), self.assertRaises(RuntimeError):
-            task.control_agent("start")
+            task.control_agent("stop")
 
     def test_pig_requires_recent_authenticated_heartbeat(self):
         online_agent = {"online": True, "busy": False}

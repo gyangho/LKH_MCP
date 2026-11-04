@@ -33,7 +33,7 @@ def heartbeat(agent_id: str, projects: list[str], capabilities: dict) -> dict:
     bridge._enabled()
     if not isinstance(agent_id, str) or not _AGENT_ID.fullmatch(agent_id):
         raise ValueError("Invalid agent ID")
-    if (not isinstance(projects, list) or not 1 <= len(projects) <= 10 or
+    if (not isinstance(projects, list) or not 0 <= len(projects) <= 10 or
             any(not isinstance(p, str) or not _AGENT_ID.fullmatch(p) for p in projects) or
             len(projects) != len(set(projects))):
         raise ValueError("Invalid project aliases")

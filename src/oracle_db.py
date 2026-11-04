@@ -64,7 +64,18 @@ def _driver():
                 path = Path(client_dir).expanduser()
                 if not path.is_absolute():
                     path = Path(__file__).resolve().parent.parent / path
-                _oracledb.init_oracle_client(lib_dir=str(path.resolve()))
+                path = path.resolve()
+                if os.name == "nt":
+                    # OCI loads companion DLLs through PATH even when lib_dir is
+                    # explicit. PyInstaller's DLL directory otherwise causes
+                    # OCIClientVersion to return zero (DPI-1072) with valid 19c.
+                    previous = os.environ.get("PATH", "")
+                    entries = previous.split(os.pathsep) if previous else []
+                    normalized = os.path.normcase(str(path))
+                    entries = [entry for entry in entries
+                               if os.path.normcase(entry) != normalized]
+                    os.environ["PATH"] = os.pathsep.join([str(path), *entries])
+                _oracledb.init_oracle_client(lib_dir=str(path))
             _client_initialized = True
         return _oracledb
 
@@ -94,9 +105,14 @@ def connection(profile) -> Iterator:
                             dsn=_get_dsn(driver, profile), tcp_connect_timeout=8, retry_count=0) as conn:
             conn.call_timeout = 8000
             yield conn
-    except Exception:
-        # Never return driver errors containing DSNs, accounts or credentials.
-        raise OracleUnavailable("Oracle connection or query failed") from None
+    except Exception as exc:
+        # Extract only a validated driver code, never the message/DSN/credentials.
+        detail = exc.args[0] if exc.args else None
+        code = getattr(detail, "full_code", "")
+        if not isinstance(code, str) or not re.fullmatch(r"(?:ORA|DPY|DPI)-[0-9]{3,5}", code):
+            match = re.search(r"\b(?:ORA|DPY|DPI)-[0-9]{3,5}\b", str(exc))
+            code = match.group(0) if match else "UNCLASSIFIED"
+        raise OracleUnavailable("Oracle connection or query failed [" + code + "]") from None
 
 
 def _profile(connection_id, *, allow_disabled=False):

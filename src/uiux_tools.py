@@ -45,23 +45,25 @@ def _check_query(query: str) -> str:
 
 
 def _execute(*args: str) -> dict[str, Any]:
-    if not SCRIPT.is_file():
+    from public_skills import skill_paths
+    managed = skill_paths("uiux")
+    script = managed["source"] / "src/ui-ux-pro-max/scripts/search.py" if managed else SCRIPT
+    if not script.is_file():
         raise RuntimeError(
-            "원본 UI UX Pro Max 검색 파일을 찾을 수 없습니다. "
-            "vendor/ui-ux-pro-max-skill/src/ui-ux-pro-max/scripts/search.py 경로를 확인하세요."
+            "UI UX Pro Max 검색 자료를 찾을 수 없습니다. "
+            "설치 프로그램의 공개 구성요소 다운로드를 다시 진행하세요."
         )
-    # Do not accept a command string or use shell=True; never persist files.
-    if getattr(sys, "frozen", False):
-        interpreter = os.getenv("UIUX_PYTHON_EXECUTABLE", "").strip()
-        if not interpreter or not Path(interpreter).is_absolute() or not Path(interpreter).is_file():
-            raise RuntimeError("EXE 모드에서는 UIUX_PYTHON_EXECUTABLE에 python.exe 절대 경로를 지정하세요.")
+    if managed:
+        cmd = [str(managed["python"]), "-I", str(managed["root"] / "scripts/native-uiux.py"), *args, "--json"]
+    elif getattr(sys, "frozen", False):
+        raise RuntimeError("UI UX 원본 자료 또는 실행 환경이 없습니다. 설치 프로그램으로 복구하세요.")
     else:
         interpreter = os.getenv("UIUX_PYTHON_EXECUTABLE") or sys.executable
-    cmd = [interpreter, str(SCRIPT), *args, "--json"]
+        cmd = [interpreter, str(script), *args, "--json"]
     try:
         result = subprocess.run(
             cmd,
-            cwd=str(SCRIPT.parent),
+            cwd=str(script.parent),
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
@@ -78,8 +80,7 @@ def _execute(*args: str) -> dict[str, Any]:
         raise RuntimeError("UI UX Pro Max 검색 프로세스 시작에 실패했습니다. 실행 파일과 접근 권한을 확인하세요.") from exc
     if result.returncode:
         raise RuntimeError(
-            f"UI UX Pro Max 검색 오류 (exit={result.returncode}): "
-            f"{result.stderr[-1000:]}"
+            f"UI UX Pro Max 검색 오류 (exit={result.returncode}). 설치된 검색 자산을 확인하세요."
         )
     if len(result.stdout) > 600_000:
         raise RuntimeError("검색 결과가 너무 큽니다. 검색어를 구체화하세요.")
@@ -96,15 +97,18 @@ def register_uiux_tools(mcp: Any) -> None:
     @mcp.tool()
     def uiux_diagnostics() -> dict:
         """Read-only UI UX Pro Max installation check; no file paths or tokens exposed."""
+        from public_skills import skill_paths
+        managed = skill_paths("uiux")
         frozen = bool(getattr(sys, "frozen", False))
-        interpreter = (os.environ.get("UIUX_PYTHON_EXECUTABLE", "").strip()
-                       if frozen else (os.environ.get("UIUX_PYTHON_EXECUTABLE") or sys.executable))
-        python_ok = bool(interpreter and Path(interpreter).is_file())
-        ready = SCRIPT.is_file() and python_ok
-        return {"ready": ready, "search_script_found": SCRIPT.is_file(),
+        interpreter = os.environ.get("UIUX_PYTHON_EXECUTABLE") or sys.executable
+        found = bool(managed) or (not frozen and SCRIPT.is_file())
+        python_ok = bool(managed) or (not frozen and Path(interpreter).is_file())
+        ready = found and python_ok
+        return {"ready": ready, "search_script_found": found,
                 "python_interpreter_available": python_ok, "packaged_exe": frozen,
-                "hint": ("정상" if ready else
-                         "UI UX Pro Max vendor 서브모듈과 Python 실행 경로를 확인하세요.")}
+                "version": managed["version"] if managed else None,
+                "commit": managed["commit"] if managed else None,
+                "hint": "정상" if ready else "설치 프로그램에서 공개 구성요소 다운로드를 다시 진행하세요."}
 
     """Register only UI/UX-domain tools on the existing MCPServer instance."""
 

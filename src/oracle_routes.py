@@ -57,6 +57,8 @@ def register_oracle_routes(mcp):
             return _private(JSONResponse(result, status_code=201 if method == "POST" else 200))
         except (AdminNotConfigured, AdminUnauthorized) as exc:
             return _private(_auth_response(exc, request))
+        except oracle_db.OracleUnavailable as exc:
+            return _private(JSONResponse({"error": str(exc)}, status_code=503))
         except store.NotFound:
             return _private(JSONResponse({"error": "Oracle 연결을 찾을 수 없습니다."}, status_code=404))
         except store.Conflict:

@@ -46,7 +46,7 @@ class NativeRuntimeTests(unittest.TestCase):
         self.assertEqual(self.env["MCP_PORT"], "19000")
 
     def test_rejects_nonloopback_before_any_directory_created(self):
-        for host in ("0.0.0.0", "192.0.1.22", "[::]", "example.com"):
+        for host in ("0.0.0.0", "224.0.0.1", "[::]", "example.com"):
             with self.subTest(host=host):
                 with self.assertRaises(ValueError):
                     native_runtime.prepare_native_environment({"MCP_HOST": host}, root=self.root)
@@ -82,7 +82,8 @@ class NativeRuntimeTests(unittest.TestCase):
         # Guard the Windows Installer bootstrap contract on every Python CI run.
         script = (Path(__file__).resolve().parents[1] /
                   "scripts" / "install-agent-task.ps1").read_text(encoding="utf-8")
-        self.assertIn('server_url = "http://127.0.0.1:8001"', script)
+        self.assertIn('[int]$AdminPort = 8001', script)
+        self.assertIn('server_url = "http://127.0.0.1:$AdminPort"', script)
         self.assertNotIn("127.0.0.1:18081", script)
 
     def test_asset_checks_are_explicit(self):

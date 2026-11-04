@@ -31,6 +31,20 @@ class ConnectionTests(unittest.TestCase):
         settings_store._READY = False
         self.addCleanup(lambda: setattr(settings_store, "_READY", False))
 
+    def test_name_resolution_requires_explicit_unique_enabled_connection(self):
+        item = store.create(profile(name="itam-prod"), "test", "admin")
+        self.assertEqual(store.resolve_connection(name="itam-prod"), item["id"])
+        self.assertEqual(store.resolve_connection(connection_id=item["id"]), item["id"])
+        with self.assertRaises(ValueError):
+            store.resolve_connection()
+        with self.assertRaises(ValueError):
+            store.resolve_connection(name="itam-prod", connection_id=item["id"])
+        store.create(profile(name="itam-prod"), "test", "admin")
+        with self.assertRaises(ValueError):
+            store.resolve_connection(name="itam-prod")
+        with self.assertRaises(store.NotFound):
+            store.resolve_connection(name="unknown")
+
     def test_crud_password_preservation_and_no_plaintext(self):
         item = store.create(profile(), "private-db-password", "admin")
         self.assertNotIn("password", item)

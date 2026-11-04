@@ -5,6 +5,10 @@ param(
     [Parameter(Mandatory=$true)][string]$InstallDir
 )
 $ErrorActionPreference = 'Stop'
+$principal = [Security.Principal.WindowsPrincipal]::new([Security.Principal.WindowsIdentity]::GetCurrent())
+if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+    throw 'Uninstaller must run elevated. Launch the installed uninstaller and approve Windows UAC.'
+}
 Set-StrictMode -Version Latest
 
 function FullPath([string]$path) {
@@ -79,7 +83,17 @@ if ($Mode -eq 'all' -and (Test-Path -LiteralPath $db) -and
 }
 if ($null -ne $service -and $service.State -ne 'Stopped') {
     try {
-        $verdict = Invoke-RestMethod -Uri 'http://127.0.0.1:8001/admin/host/tray-state' -TimeoutSec 3
+        $adminPort = 8001
+        $networkFile = Join-Path $state 'config\network.ini'
+        if (Test-Path -LiteralPath $networkFile -PathType Leaf) {
+            $entries = @(Get-Content -LiteralPath $networkFile | Where-Object { $_ -match '^admin_port\s*=' })
+            if ($entries.Count -ne 1 -or $entries[0] -notmatch '^admin_port\s*=\s*([0-9]{1,5})\s*$') {
+                throw 'Invalid administrator port configuration'
+            }
+            $adminPort = [int]$Matches[1]
+            if ($adminPort -lt 1 -or $adminPort -gt 65535) { throw 'Invalid administrator port' }
+        }
+        $verdict = Invoke-RestMethod -Uri "http://127.0.0.1:$adminPort/admin/host/tray-state" -TimeoutSec 3
     } catch {
         throw 'Running Native service could not confirm idle status'
     }
@@ -104,6 +118,22 @@ foreach ($task in @($agent,$tray)) {
         if ($current.State -eq 'Running') { throw 'Scheduled task refused to stop' }
     }
 }
+# Post-install/menu shortcuts can launch a tray outside Task Scheduler.
+# Stop only executable paths belonging to this exact installation.
+foreach ($relative in @('LKH-MCP-Tray\LKH-MCP-Tray.exe', 'agent\LKH-Codex-Agent.exe')) {
+    $expected = FullPath (Join-Path $install $relative)
+    foreach ($process in @(Get-CimInstance Win32_Process -ErrorAction Stop)) {
+        if ($process.ExecutablePath -and (FullPath $process.ExecutablePath) -ieq $expected) {
+            $owned = Get-Process -Id $process.ProcessId -ErrorAction SilentlyContinue
+            if ($null -ne $owned) {
+                # Revalidate after lookup to avoid stopping a reused PID.
+                if ((FullPath $owned.Path) -ine $expected) { throw 'Process ownership changed' }
+                $owned.Kill()
+                if (-not $owned.WaitForExit(15000)) { throw "Installed process still running: $relative" }
+            }
+        }
+    }
+}
 if ($null -ne $service) {
     $running = Get-Service -Name 'LKH-MCP-Server' -ErrorAction Stop
     if ($running.Status -ne 'Stopped') {
@@ -117,6 +147,15 @@ foreach ($task in @($agent,$tray)) {
     if ($null -ne $task) {
         Unregister-ScheduledTask -TaskPath '\' -TaskName $task.TaskName -Confirm:$false -ErrorAction Stop
     }
+}
+# Downloaded skill versions are application code, removed in every uninstall mode.
+$skillsRoot = FullPath (Join-Path $install 'skills')
+if (-not $skillsRoot.StartsWith($install + '\', [StringComparison]::OrdinalIgnoreCase)) {
+    throw 'Downloaded skills directory is outside installation'
+}
+NoReparse $skillsRoot $true
+if (Test-Path -LiteralPath $skillsRoot) {
+    Remove-Item -LiteralPath $skillsRoot -Recurse -Force -ErrorAction Stop
 }
 if ($Mode -eq 'settings' -and (Test-Path -LiteralPath (Join-Path $state 'config'))) {
     # The SQLite device verifier remains, while its DPAPI key is removed.

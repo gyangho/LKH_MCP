@@ -9,6 +9,19 @@ import native_tray as tray
 
 
 class TrayShutdownTests(unittest.TestCase):
+    def test_progress_reports_agent_uac_and_service_wait_in_order(self):
+        progress = []
+        with patch.object(tray, "_read_state", return_value={"state": "online", "busy": False}), \
+             patch.object(tray, "_installed_service_binary", return_value=Path("service.exe")), \
+             patch.object(tray, "task_state", return_value="running"), \
+             patch.object(tray, "control_agent"), patch.object(tray, "_wait_for_agent_stop"), \
+             patch.object(tray, "_request_scm_stop"), patch.object(tray, "_wait_for_service_stop"):
+            tray.shutdown_from_tray("both", progress=progress.append)
+        self.assertIn("Codex", progress[0])
+        self.assertIn("Agent 중지", progress[2])
+        self.assertIn("UAC", progress[3])
+        self.assertIn("서비스 중지", progress[4])
+
     def test_server_shutdown_requests_fixed_scm_only(self):
         binary = Path("C:/Program Files/LKH MCP/LKH-MCP-Service/LKH-MCP-Service.exe")
         with patch.object(tray, "_read_state", return_value={"state": "offline", "busy": False}), \

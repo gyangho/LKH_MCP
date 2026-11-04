@@ -44,6 +44,9 @@ if os.name == "nt":
             win32event.SetEvent(self.stop_event)
 
         def SvcDoRun(self):
+            from native_installation import allowed
+            if not allowed(server_start=True):
+                raise RuntimeError("Installation is incomplete or failed; service startup blocked")
             server = server_executable(Path(sys.executable))
             program_data = os.environ.get("PROGRAMDATA", "")
             if not program_data:

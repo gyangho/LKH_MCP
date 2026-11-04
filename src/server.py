@@ -19,10 +19,24 @@ initialize_state()
 
 mcp = MCPServer(
     "LKH MCP",
-    instructions="Oracle SELECT-only, UI UX guidance, scoped Graphify queries, and allowlisted Git tools. Privileged operations require local opt-in."
+    instructions="Oracle SELECT-only, UI UX guidance, scoped Graphify queries, and allowlisted Git tools. Privileged operations require local opt-in. For every Oracle request, use the connection name explicitly selected by the user. If none is specified in context, ask which connection to use; never choose one automatically. Resolve names with oracle_list_connections or connection_name."
 )
 instrument_tools(mcp)
 instrument_routes(mcp)
+
+
+def _oracle_call(query, connection_id, connection_name, *args):
+    from oracle_connections import resolve_connection, NotFound
+    from oracle_db import OracleUnavailable
+    try:
+        ident = resolve_connection(name=connection_name, connection_id=connection_id)
+    except (ValueError, NotFound):
+        return {"error": {"code": "CONNECTION_SELECTION_REQUIRED",
+                          "message": "사용할 연결 이름 하나를 확인하세요. 없거나 중복된 이름은 연결 목록에서 선택하세요."}}
+    try:
+        return query(ident, *args)
+    except OracleUnavailable as exc:
+        return {"error": {"code": "ORACLE_UNAVAILABLE", "message": str(exc)}}
 
 
 @mcp.tool()
@@ -33,21 +47,21 @@ def oracle_list_connections() -> dict:
 
 
 @mcp.tool()
-def oracle_select_dual(connection_id: str) -> dict:
-    """Run fixed SELECT 'MCP_OK' FROM DUAL; verify Oracle connectivity."""
-    return test_select(connection_id)
+def oracle_select_dual(connection_id: str = "", connection_name: str = "") -> dict:
+    """Run fixed SELECT 'MCP_OK' FROM DUAL; verify Oracle connectivity. Specify connection_name or connection_id; ask the user if neither is known."""
+    return _oracle_call(test_select, connection_id, connection_name)
 
 
 @mcp.tool()
-def oracle_list_tables(connection_id: str, limit: int = 30) -> dict:
+def oracle_list_tables(connection_id: str = "", limit: int = 30, connection_name: str = "") -> dict:
     """List up to 100 allowlisted tables accessible to the Oracle user."""
-    return list_tables(connection_id, limit)
+    return _oracle_call(list_tables, connection_id, connection_name, limit)
 
 
 @mcp.tool()
-def oracle_preview_table(connection_id: str, table_name: str, limit: int = 5) -> dict:
+def oracle_preview_table(connection_id: str = "", table_name: str = "", limit: int = 5, connection_name: str = "") -> dict:
     """Preview up to 20 rows of an allowlisted table."""
-    return preview_table(connection_id, table_name, limit)
+    return _oracle_call(preview_table, connection_id, connection_name, table_name, limit)
 
 
 register_uiux_tools(mcp)

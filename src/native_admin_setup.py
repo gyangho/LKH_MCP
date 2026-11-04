@@ -56,11 +56,40 @@ def initialize(*, username: str = "admin", root: Path | None = None,
 def main(argv=None):
     parser = argparse.ArgumentParser()
     parser.add_argument("--initialize", action="store_true")
+    parser.add_argument("--configure-network", action="store_true")
+    parser.add_argument("--configure-project", action="store_true")
+    parser.add_argument("--project-alias")
+    parser.add_argument("--repository")
+    parser.add_argument("--host")
+    parser.add_argument("--mcp-port")
+    parser.add_argument("--admin-port")
     parser.add_argument("--stdin-json", action="store_true", help="Receive installer credentials over a private stdin pipe")
     args = parser.parse_args(argv)
-    if os.name != "nt" or not args.initialize:
+    if os.name != "nt" or sum((args.initialize, args.configure_network, args.configure_project)) != 1:
         parser.error("Windows interactive administrator setup required")
     try:
+        if args.configure_project:
+            from native_runtime import prepare_native_environment
+            prepare_native_environment()
+            import settings_store
+            import repository_store
+            alias, repository = repository_store.validate(args.project_alias, args.repository)
+            existing = repository_store.mapping()
+            if alias in existing and existing[alias] != repository:
+                raise ValueError("Existing project approval differs; administrator review required")
+            if alias not in existing:
+                repository_store.create(alias, repository, "native-installer")
+            # Installation explicitly requested a checkout and Windows Agent task.
+            settings_store.initialize()
+            current = next(x for x in settings_store.items() if x["key"] == "CODEX_AGENT_ENABLED")
+            settings_store.update("CODEX_AGENT_ENABLED", True, "native-installer", current["revision"])
+            print("Installer-selected project approved for Agent.")
+            return
+        if args.configure_network:
+            from native_network import save
+            save(args.host, args.mcp_port, args.admin_port)
+            print("LKH MCP network configured.")
+            return
         if args.stdin_json:
             # ASCII JSON escapes avoid console code-page dependence. Never echo input.
             raw = sys.stdin.read(8193)

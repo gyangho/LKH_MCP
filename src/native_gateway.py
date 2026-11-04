@@ -4,6 +4,15 @@ from __future__ import annotations
 MCP_ROUTES = frozenset(("/mcp", "/mcp/"))
 
 
+def transport_security(host: str, port: int):
+    from mcp.server.transport_security import TransportSecuritySettings
+    return TransportSecuritySettings(
+        enable_dns_rebinding_protection=True,
+        allowed_hosts=[f"{host}:{port}", "127.0.0.1:*", "localhost:*", "[::1]:*"],
+        allowed_origins=[f"http://{host}:{port}", "http://127.0.0.1:*", "http://localhost:*", "http://[::1]:*"],
+    )
+
+
 def allowed_path(surface: str, path: str) -> bool:
     if surface == "mcp":
         return path in MCP_ROUTES
@@ -25,8 +34,21 @@ class SurfaceGuard:
             await send({"type": "http.response.start", "status": 200,
                         "headers": [(b"content-type", b"application/json"),
                                     (b"cache-control", b"no-store")]})
-            await send({"type": "http.response.body", "body": b'{"status":"ok"}'})
+            import json
+            import os
+            from version import VERSION
+            body = json.dumps({"status": "ok", "application": "LKH-MCP", "version": VERSION,
+                               "pid": os.getpid()}).encode("utf-8")
+            await send({"type": "http.response.body", "body": body})
             return
+        if kind == "http":
+            from native_installation import allowed
+            if not allowed():
+                await send({"type": "http.response.start", "status": 503,
+                            "headers": [(b"content-type", b"application/json"),
+                                        (b"cache-control", b"no-store")]})
+                await send({"type": "http.response.body", "body": b'{"error":"installation_not_ready"}'})
+                return
         if kind != "http" or not allowed_path(self.surface, scope.get("path", "")):
             if kind == "http":
                 await send({"type": "http.response.start", "status": 404,
@@ -44,13 +66,14 @@ async def run_native_gateways(mcp, *, host: str, mcp_port: int,
     """Run one MCP manager behind two independently filtered HTTP listeners."""
     import asyncio
     import uvicorn
-    backend = mcp.streamable_http_app(stateless_http=True, json_response=True)
+    backend = mcp.streamable_http_app(stateless_http=True, json_response=True,
+                                      transport_security=transport_security(host, mcp_port))
     servers = [
         uvicorn.Server(uvicorn.Config(
             SurfaceGuard(backend, "mcp"), host=host, port=mcp_port,
             lifespan="off", access_log=False, log_level="warning")),
         uvicorn.Server(uvicorn.Config(
-            SurfaceGuard(backend, "admin"), host=host, port=admin_port,
+            SurfaceGuard(backend, "admin"), host="127.0.0.1", port=admin_port,
             lifespan="off", access_log=False, log_level="warning")),
     ]
     async with mcp.session_manager.run():

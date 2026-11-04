@@ -39,13 +39,13 @@ export function OracleConnections({ request }: { request: Request }) {
   return <>
     <section className="panel">
       <h2>Oracle 데이터베이스 연결</h2>
-      <p className="hint">연결마다 계정과 조회 허용 테이블을 분리합니다. MCP 도구에서는 연결 ID를 선택하세요.</p>
+      <p className="hint">연결마다 계정과 조회 허용 테이블을 분리합니다. MCP에서는 연결 이름으로 요청하세요. 이름을 지정하지 않으면 사용할 연결을 먼저 확인합니다.</p>
       <div className="actions">
         <button type="button" className="button" disabled={busy} onClick={() => void action(async () => { await reload(); setNotice("목록을 새로고침했습니다. 편집 중인 값은 유지됩니다."); })}>목록 새로고침</button>
         <button type="button" className="button" disabled={busy} onClick={reset}>새 연결 작성</button>
       </div>
       {error && <p className="error" role="alert">{error}</p>}
-      <p role="status" aria-live="polite">{busy ? "처리 중…" : notice}</p>
+      <p role="status" aria-live="polite">{busy ? (notice || "처리 중…") : notice}</p>
       {!connections.length && <p className="muted">등록된 연결이 없습니다. 아래에서 첫 연결을 추가하세요.</p>}
       <div className="table-wrap"><table><thead><tr><th>연결</th><th>주소 / 사용자</th><th>상태</th><th>관리</th></tr></thead><tbody>
         {connections.map(c => <tr key={c.id}>
@@ -54,7 +54,7 @@ export function OracleConnections({ request }: { request: Request }) {
           <td>{c.enabled ? "활성" : "비활성"}</td>
           <td><div className="actions">
             <button type="button" className="button" disabled={busy} onClick={() => { setEditing(c); const { id, revision, password_configured, updated_at, ...profile } = c; setDraft(profile); setPassword(""); setError(""); setNotice(`${c.name} 편집 중`); }}>수정</button>
-            <button type="button" className="button" disabled={busy} onClick={() => void action(async () => { await request(`${base}/${c.id}/test`, {}); setNotice(`${c.name}: 저장된 설정의 연결 테스트 성공`); })}>저장된 연결 테스트</button>
+            <button type="button" className="button" disabled={busy} onClick={() => void action(async () => { setNotice(`${c.name}: 저장된 연결 ID로 접속 테스트 중…`); await request(`${base}/${encodeURIComponent(c.id)}/test`, {}, "POST"); setNotice(`${c.name}: 저장된 설정의 연결 테스트 성공`); })}>저장된 연결 테스트</button>
             <button type="button" className="button danger" disabled={busy} onClick={() => {
               if (confirm(`${c.name} 연결정보를 삭제할까요? 실제 데이터베이스는 변경되지 않습니다.`)) void action(async () => { await request(`${base}/${c.id}`, { revision: c.revision }, "DELETE"); if (editing?.id === c.id) reset(); await reload(); setNotice("연결정보를 삭제했습니다."); });
             }}>삭제</button>

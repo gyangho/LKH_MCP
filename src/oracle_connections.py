@@ -195,3 +195,18 @@ def delete(ident, revision, actor):
         db.execute("DELETE FROM oracle_connections WHERE id=?", (ident,))
         _audit(db, actor, ident, "delete")
     return {"deleted": True}
+
+
+def resolve_connection(*, name: str = "", connection_id: str = "") -> str:
+    """Resolve an explicit selection; never silently choose a database."""
+    if bool(name) == bool(connection_id):
+        raise ValueError("어떤 Oracle 연결을 사용할까요? 연결 이름 하나를 지정하세요.")
+    if connection_id:
+        candidates = [p for p in list_connections(mcp=True) if p["id"] == connection_id]
+    else:
+        candidates = [p for p in list_connections(mcp=True) if p["name"] == name]
+    if not candidates:
+        raise NotFound("지정한 활성 Oracle 연결을 찾을 수 없습니다. 연결 목록을 확인하세요.")
+    if len(candidates) != 1:
+        raise ValueError("같은 이름의 연결이 여러 개입니다. 연결 ID로 선택하거나 이름을 구분하세요.")
+    return candidates[0]["id"]

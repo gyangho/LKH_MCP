@@ -41,13 +41,14 @@ def prepare_native_environment(
     """Configure an isolated preview without modifying Docker runtime or secrets."""
     values = os.environ if env is None else env
     base = native_state_dir(values, root=root)
-    host = values.get("MCP_HOST") or "127.0.0.1"
-    if host not in _LOOPBACK:
-        raise ValueError("Native preview may listen only on loopback until gateway isolation is verified")
-    port = values.get("MCP_PORT") or _PREVIEW_PORT
+    from native_network import load, validate
+    network = load(root=base)
+    host = values.get("MCP_HOST") or network["host"]
+    port = values.get("MCP_PORT") or network["mcp_port"]
     if not port.isdecimal() or not 1 <= int(port) <= 65535:
         raise ValueError("Invalid MCP_PORT")
-    admin_port = values.get("LKH_NATIVE_ADMIN_PORT") or "8001"
+    admin_port = values.get("LKH_NATIVE_ADMIN_PORT") or network["admin_port"]
+    validate(host, port, admin_port)
     if not admin_port.isdecimal() or not 1 <= int(admin_port) <= 65535:
         raise ValueError("Invalid native admin port")
     if int(port) == int(admin_port):
@@ -83,7 +84,5 @@ def required_assets(root: Path | None = None) -> dict[str, bool]:
     base = packaged_root() if root is None else Path(root)
     paths = {
         "admin_html": base / "web" / "dist" / "index.html",
-        "uiux_search": base / "vendor" / "ui-ux-pro-max-skill"
-                       / "src" / "ui-ux-pro-max" / "scripts" / "search.py",
     }
     return {name: file.is_file() for name, file in paths.items()}

@@ -1,8 +1,14 @@
 # I1 preview: build a headless native Windows server bundle (NOT an SCM service).
 # Runs only on a Windows build host. Does not register services, modify ports or DB.
-param([string]$Python = ".\.venv\Scripts\python.exe")
+param([string]$Python = ".\.venv\Scripts\python.exe", [switch]$SkipVersionBump)
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
+$Python = (Get-Command $Python -ErrorAction Stop).Source
+$buildLock = $null
+if (-not $SkipVersionBump) {
+    New-Item -ItemType Directory -Path (Join-Path $root 'dist') -Force | Out-Null
+    $buildLock = [IO.File]::Open((Join-Path $root 'dist\.native-build.lock'), [IO.FileMode]::OpenOrCreate, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)
+}
 Push-Location $root
 try {
     if (-not $IsWindows -and $PSVersionTable.PSEdition -eq "Core") {
@@ -10,9 +16,9 @@ try {
     }
     if (-not (Test-Path -LiteralPath $Python -PathType Leaf)) { throw "Python interpreter not found: $Python" }
     if (-not (Get-Command npm -ErrorAction SilentlyContinue)) { throw "Node.js/npm 22+ required" }
-    $vendor = "vendor\ui-ux-pro-max-skill\src\ui-ux-pro-max\scripts\search.py"
-    if (-not (Test-Path -LiteralPath $vendor -PathType Leaf)) {
-        throw "Vendor submodule not initialized; use git submodule update --init --recursive"
+    if (-not $SkipVersionBump) {
+        & $Python scripts/bump-native-version.py
+        if ($LASTEXITCODE -ne 0) { throw "Native version update failed" }
     }
     Push-Location frontend
     try {
@@ -32,7 +38,6 @@ try {
         --collect-submodules mcp.server --collect-submodules oracledb `
         --hidden-import win32com.client --hidden-import win32crypt `
         --add-data "frontend/dist;web/dist" `
-        --add-data "vendor/ui-ux-pro-max-skill;vendor/ui-ux-pro-max-skill" `
         src/native_server.py
     if ($LASTEXITCODE -ne 0) { throw "PyInstaller failed" }
     $exe = "dist\LKH-MCP-Server\LKH-MCP-Server.exe"
@@ -40,6 +45,6 @@ try {
     & $exe --check
     if ($LASTEXITCODE -ne 0) { throw "Native bundle preflight failed" }
     Write-Host "I1 preview built and asset-checked: $exe"
-    Write-Host "NOT validated: SCM Service, dual-port isolation, Oracle 11g, UIUX external Python."
+    Write-Host "NOT validated: SCM Service, dual-port isolation, Oracle, installer-downloaded public skills."
     Write-Host "Default preview bind: 127.0.0.1:8000 (does not replace Docker)."
-} finally { Pop-Location }
+} finally { Pop-Location; if ($null -ne $buildLock) { $buildLock.Dispose() } }

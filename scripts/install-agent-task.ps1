@@ -5,7 +5,8 @@ param(
     [Parameter(Mandatory=$true)][string]$AgentUser,
     [string]$ProjectAlias = "LKH_MCP",
     [string]$Repository = "gyangho/LKH_MCP",
-    [string]$CheckoutPath = ""
+    [string]$CheckoutPath = "",
+    [ValidateRange(1,65535)][int]$AdminPort = 8001
 )
 $ErrorActionPreference = "Stop"
 
@@ -35,12 +36,15 @@ if ($checkout -ne "") {
 $account = New-Object System.Security.Principal.NTAccount($AgentUser)
 $sid = $account.Translate([System.Security.Principal.SecurityIdentifier]).Value
 
-if (-not (Test-Path -LiteralPath $config -PathType Leaf) -and $checkout -ne "") {
+if (-not (Test-Path -LiteralPath $config -PathType Leaf)) {
     $payload = @{
-        server_url = "http://127.0.0.1:8001"
+        server_url = "http://127.0.0.1:$AdminPort"
         agent_id = "win-" + ([guid]::NewGuid().ToString("N").Substring(0, 12))
         poll_interval_seconds = 10
-        projects = @{ $ProjectAlias = @{ repository = $Repository; path = $checkout } }
+        projects = @{}
+    }
+    if ($checkout -ne "") {
+        $payload.projects[$ProjectAlias] = @{ repository = $Repository; path = $checkout }
     }
     $json = $payload | ConvertTo-Json -Depth 6
     [System.IO.File]::WriteAllText($config, $json, [System.Text.UTF8Encoding]::new($false))
@@ -49,9 +53,20 @@ if (-not (Test-Path -LiteralPath $config -PathType Leaf) -and $checkout -ne "") 
 if (Test-Path -LiteralPath $config -PathType Leaf) {
     try {
         $existing = Get-Content -LiteralPath $config -Raw -Encoding UTF8 | ConvertFrom-Json -ErrorAction Stop
-        if (-not $existing.agent_id -or -not $existing.server_url -or -not $existing.projects) {
+        if (-not $existing.agent_id -or -not $existing.server_url -or $null -eq $existing.projects) {
             throw "Invalid existing Agent configuration"
         }
+        # Keep enrollment, projects and identity while following the selected local port.
+        $existing.server_url = "http://127.0.0.1:$AdminPort"
+        if ($checkout -ne "") {
+            # Installer selection updates this mapping; preserve other configured projects.
+            $existing.projects | Add-Member -MemberType NoteProperty -Name $ProjectAlias -Value @{
+                repository = $Repository; path = $checkout
+            } -Force
+            if (@($existing.projects.PSObject.Properties).Count -gt 10) { throw "At most 10 Agent projects" }
+        }
+        $updated = $existing | ConvertTo-Json -Depth 20
+        [System.IO.File]::WriteAllText($config, $updated, [System.Text.UTF8Encoding]::new($false))
     } catch {
         throw "Agent config is invalid; fix it before scheduling"
     }
@@ -71,6 +86,7 @@ $principal = New-ScheduledTaskPrincipal -UserId $AgentUser -LogonType Interactiv
 $agentAction = New-ScheduledTaskAction -Execute $agentExe -Argument ('--config "' + $config + '"') -WorkingDirectory (Split-Path $agentExe)
 $agentSettings = New-ScheduledTaskSettingsSet -MultipleInstances IgnoreNew -ExecutionTimeLimit (New-TimeSpan -Seconds 0) -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1)
 Register-ScheduledTask -TaskName "LKH-Codex-Agent" -Action $agentAction -Trigger $trigger -Principal $principal -Settings $agentSettings -Force | Out-Null
+Disable-ScheduledTask -TaskName "LKH-Codex-Agent" | Out-Null
 if (-not (Test-Path -LiteralPath $config -PathType Leaf)) {
     Disable-ScheduledTask -TaskName "LKH-Codex-Agent" | Out-Null
 }
@@ -83,7 +99,8 @@ $descriptor = $registered.GetSecurityDescriptor(4)
 $registered.SetSecurityDescriptor($descriptor + "(A;;GRGX;;;LS)", 0)
 
 # Tray runs in interactive user's session, independently of the SCM process.
-$trayAction = New-ScheduledTaskAction -Execute $trayExe -WorkingDirectory (Split-Path $trayExe)
+$trayAction = New-ScheduledTaskAction -Execute $trayExe -Argument "--tray-only" -WorkingDirectory (Split-Path $trayExe)
 $traySettings = New-ScheduledTaskSettingsSet -MultipleInstances IgnoreNew
 Register-ScheduledTask -TaskName "LKH-MCP-Tray" -Action $trayAction -Trigger $trigger -Principal $principal -Settings $traySettings -Force | Out-Null
+Disable-ScheduledTask -TaskName "LKH-MCP-Tray" | Out-Null
 Write-Host "Fixed Agent and Tray tasks configured for $AgentUser"

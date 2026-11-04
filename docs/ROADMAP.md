@@ -1,5 +1,13 @@
 # LKH MCP 통합 로드맵 v2.0 — Windows Installer + Phase 0–9
 
+2026-11-04 Agent 시작 복구: 설치본 0.0.5에서 기본 예약 작업 시작이 `0x800710E0`으로 거부되는 것을 재현했다. 등록 계정의 활성 세션을 명시한 시작으로 실제 Agent Running/heartbeat Online을 확인했다. 관리자 start/restart 소스에 같은 계정 SID·세션 선택을 추가했으며 관련 37개 테스트가 통과했다. 새 서비스 바이너리 배포 및 관리자 버튼 E2E는 별도 미검증이다. [검증 기록](VERIFICATION.md)을 참조한다.
+
+2026-11-04 검증 준비 단계: Agent 로컬에 저장소·정본 경로로 묶인 opt-in 프로필을 추가했다. 임시 worktree에 승인된 Gradle/npm 자산을 준비하고 관리 정책이 적용된 workspace 샌드박스 사전 실행이 성공해야 Codex 검증을 시작한다. 루프백 정책 자동 완화·다운로드·운영 배포는 포함하지 않는다. 실제 설치본 반영 및 대상 PC E2E는 미검증이며 [빌드·설정](BUILD_AND_CONFIGURATION.md)의 준비 절차를 따른다.
+
+2026-11-04 현장 복구: Portal이 이전 IP의 서버를 참조해 발생한 handshake timeout을 현재 주소의 기존 등록 서버로 교체해 복구했다. 실제 Portal에서 지침·Oracle 두 연결·Codex 진단·Graphify 조회가 정상 응답했다. Agent heartbeat Online을 확인했으나 스케줄러 자동 시작은 별도 미검증이다. 상세 증거는 [검증](VERIFICATION.md)을 참조한다.
+
+2026-11-03 현장 보완: 공개 스킬 소스 ACL을 복구해 UIUX 실제 검색과 Graphify 합성 AST 생성을 확인했다. Oracle의 frozen DLL 검색/PATH 문제를 재현·수정하고 서비스 전용 PATH 보완 후 `itam-dev` 실제 조회가 성공했다. Graphify 프로젝트 동기화는 승인 저장소의 미커밋 변경 검사로 차단된 상태다. 새 설치기 빌드와 전체 Native E2E는 미검증이며 상세 증거는 [검증](VERIFICATION.md)을 참조한다.
+
 **계획일:** 2026-10-30 · **범위:** Windows Native Installer
 **상태 규칙:** NOT_STARTED / IN_PROGRESS / IMPLEMENTED(CI) / VERIFIED(Windows E2E) / RELEASED(운영) / BLOCKED.
 정본: [기능](FEATURES.md), [아키텍처](ARCHITECTURE.md), [빌드·운영](BUILD_AND_CONFIGURATION.md), [검증](VERIFICATION.md).
@@ -100,3 +108,13 @@ I 트랙 기본 선행: `I0→I1→I2→I3→I4→I5→I6→I7`. I5 인증 설�
 ### 2026-11-02 서비스 등록 오류 처리
 
 서비스 클래스 탐색과 CLI 종료 코드 전달을 수정하고 설치기가 필수 단계 실패를 검사하도록 변경. 서비스/트레이 회귀 18개 통과. 빌드 및 실제 SCM 설치·시작은 미검증으로 기존 Native 출시 게이트는 유지한다.
+
+## 2026-11-03 연결·Native 후속 수정
+
+연결 이름 선택과 안전한 오류 코드, 트레이 종료 진행창, 제거 로그/설치 소유 프로세스 정리, 설치 프로젝트 서버 승인 및 UIUX 전용 worker 패키징을 수정했다. 상태는 IN_PROGRESS이며 재빌드·설치·Windows E2E 및 Oracle 실접속 성공은 확인되지 않았다.
+
+SCM에서 서버 서비스 STOPPED 확인 시 트레이 자동 종료를 추가했다. 우클릭 종료의 진행창 완료 처리와 UAC 호출 형식을 보완했으며, 테스트·빌드 중단 요청에 따라 코드 확인만 진행했다.
+
+Repository에 실행 Agent/로컬 경로와 비동기 연결 확인을 추가하고 해당 Agent로 작업을 라우팅하도록 수정했다. 공개 스킬 원본은 설치 시 GitHub latest 정식 release의 커밋에서 다운로드하며, Python 런타임은 설치기에 포함한다. Graphify는 사용자별 설치 없이 Agent가 관리 런타임으로 로컬 AST 분석을 수행한다. 현재 코드는 미빌드·미설치·미검증이다.
+
+Native 진입점은 LKH MCP 실행 시 서버 시작 후 트레이 표시로 통합했다. 서버 중지 시 트레이 자동 종료를 유지하고, 설치 실패/미완료 버전의 기동을 gate로 차단한다. 빌드마다 patch 버전을 자동 증가시키되 suite 전체에서는 한 번만 증가한다. 구현 상태이며 테스트·빌드·실설치는 사용자 요청으로 실행하지 않았다.

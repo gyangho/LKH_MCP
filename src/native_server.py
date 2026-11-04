@@ -30,6 +30,10 @@ def main(argv: list[str] | None = None) -> int:
         print("Native bundle assets: OK")
         print("Service registration, Oracle connectivity, UIUX Python runtime and network access: NOT VERIFIED")
         return 0
+    from native_installation import allowed
+    if not allowed(server_start=True):
+        print("Installation is incomplete or failed; server startup blocked", file=sys.stderr)
+        return 3
     state = prepare_native_environment()
     logging.basicConfig(
         level=logging.INFO,

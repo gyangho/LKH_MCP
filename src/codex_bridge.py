@@ -184,7 +184,7 @@ def claim(agent_id: str, projects: list[str]) -> dict:
     _enabled()
     if not isinstance(agent_id, str) or not _NAME.fullmatch(agent_id):
         raise ValueError("Invalid agent ID")
-    if not isinstance(projects, list) or not projects or len(projects) > 10 or any(
+    if not isinstance(projects, list) or len(projects) > 10 or any(
             not isinstance(p, str) or not _NAME.fullmatch(p) for p in projects):
         raise ValueError("Invalid project aliases")
     projects = sorted(set(projects))
@@ -195,7 +195,10 @@ def claim(agent_id: str, projects: list[str]) -> dict:
     try:
         conn.execute("BEGIN IMMEDIATE")
         approved = _allowed(conn)
-        projects = sorted(set(projects).intersection(approved))
+        assigned = {r[0]: (r[1], r[2]) for r in conn.execute(
+            "SELECT alias,agent_id,local_path FROM approved_repositories")}
+        projects = sorted(p for p in set(projects).intersection(approved)
+                          if assigned[p][0] in ("", agent_id))
         if not projects:
             conn.execute("COMMIT")
             return {"job": None}
@@ -225,8 +228,10 @@ def claim(agent_id: str, projects: list[str]) -> dict:
                         WHERE id=? AND state='queued'""",
                      (now, agent_id, hashlib.sha256(lease.encode()).hexdigest(), row["id"]))
         conn.execute("COMMIT")
-        return {"job": {k: row[k] for k in ("id", "project", "repository", "branch", "expected_sha", "kind", "instructions")},
-                "lease": lease, "deadline_seconds": _LEASE}
+        job = {k: row[k] for k in ("id", "project", "repository", "branch", "expected_sha", "kind", "instructions")}
+        if assigned[row["project"]][0]:
+            job["execution"] = {"agent_id": assigned[row["project"]][0], "path": assigned[row["project"]][1]}
+        return {"job": job, "lease": lease, "deadline_seconds": _LEASE}
     except BaseException:
         conn.execute("ROLLBACK")
         raise
@@ -347,7 +352,20 @@ def register_codex_tools(mcp: Any) -> None:
     def codex_enqueue(project: str, branch: str, expected_sha: str,
                       kind: str = "verify", instructions: str = "") -> dict:
         """Queue Windows-only Codex: verify, diagnose, graphify, or approval-gated fix. No local repository access here."""
-        return enqueue(project, branch, expected_sha, kind, instructions)
+        try:
+            return enqueue(project, branch, expected_sha, kind, instructions)
+        except PermissionError:
+            return {"error": {"code": "AGENT_NOT_ENABLED_OR_APPROVAL_CHANGED",
+                              "message": "관리자 설정에서 Agent 활성화와 저장소 승인을 확인하세요."}}
+        except ValueError:
+            return {"error": {"code": "INVALID_TASK_REQUEST",
+                              "message": "승인 프로젝트 별칭, 브랜치, 40자리 commit SHA 및 작업 종류를 확인하세요."}}
+
+    @mcp.tool()
+    def codex_diagnostics() -> dict:
+        """Read Agent enabled state and approved project aliases before enqueueing; no paths or credentials."""
+        return {"enabled": bool(settings_store.get("CODEX_AGENT_ENABLED")),
+                "approved_projects": sorted(_allowed())}
 
     @mcp.tool()
     def codex_list_tasks() -> dict:

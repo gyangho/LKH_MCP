@@ -5,6 +5,7 @@ import json
 from typing import Any
 
 from starlette.requests import Request
+from starlette.concurrency import run_in_threadpool
 from starlette.responses import JSONResponse
 
 from codex_bridge import check_agent_token, claim, complete
@@ -12,6 +13,33 @@ from codex_presence import heartbeat
 
 
 def register_agent_routes(mcp: Any) -> None:
+
+    @mcp.custom_route("/admin/agent/repositories", methods=["POST"])
+    async def agent_repositories(request: Request):
+        headers = {"Cache-Control": "no-store"}
+        if not check_agent_token(request.headers.get("authorization", "")):
+            return JSONResponse({"error": "unauthorized"}, status_code=401, headers=headers)
+        try:
+            if request.headers.get("content-type", "").split(";")[0].strip().lower() != "application/json":
+                raise ValueError("JSON required")
+            raw = await request.body()
+            if not 1 <= len(raw) <= 2048:
+                raise ValueError("Invalid body length")
+            data = json.loads(raw)
+            if not isinstance(data, dict):
+                raise ValueError("Invalid payload")
+            from repository_bindings import configuration, finish_check
+            if set(data) == {"agent_id"}:
+                result = await run_in_threadpool(configuration, data["agent_id"])
+            elif set(data) == {"agent_id", "check_id", "lease", "code"}:
+                result = await run_in_threadpool(finish_check, data["agent_id"], data["check_id"], data["lease"], data["code"])
+            else:
+                raise ValueError("Unexpected fields")
+            return JSONResponse(result, headers=headers)
+        except PermissionError:
+            return JSONResponse({"error": "repository check denied"}, status_code=403, headers=headers)
+        except (ValueError, TypeError, KeyError):
+            return JSONResponse({"error": "invalid repository configuration request"}, status_code=400, headers=headers)
 
     @mcp.custom_route("/admin/agent/events", methods=["POST"])
     async def agent_events(request: Request):
@@ -53,8 +81,14 @@ def register_agent_routes(mcp: Any) -> None:
                                           data["capabilities"]), headers=headers)
         except PermissionError:
             return JSONResponse({"error": "agent disabled"}, status_code=403, headers=headers)
-        except (ValueError, TypeError, KeyError, json.JSONDecodeError):
-            return JSONResponse({"error": "invalid heartbeat"}, status_code=400, headers=headers)
+        except (ValueError, TypeError, KeyError, json.JSONDecodeError) as exc:
+            reasons = {"Invalid agent ID": "INVALID_AGENT_ID", "Invalid project aliases": "INVALID_PROJECT_ALIASES",
+                       "Unknown project alias": "PROJECT_NOT_APPROVED", "Invalid capability flags": "INVALID_CAPABILITIES",
+                       "JSON required": "JSON_REQUIRED", "Invalid body length": "INVALID_BODY_LENGTH"}
+            code = reasons.get(str(exc), "INVALID_HEARTBEAT")
+            import logging
+            logging.getLogger(__name__).warning("Agent heartbeat rejected: %s", code)
+            return JSONResponse({"error": "invalid heartbeat", "code": code}, status_code=400, headers=headers)
 
     @mcp.custom_route("/admin/agent/claim", methods=["POST"])
     async def agent_claim(request: Request):

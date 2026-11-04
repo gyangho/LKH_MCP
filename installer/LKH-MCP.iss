@@ -1,7 +1,7 @@
 ; LKH MCP Windows native installer — UNSIGNED PREVIEW
 ; Build with scripts/build-native-suite.ps1 then Inno Setup 6 ISCC.
 ; Does not migrate Docker/Naru, edit Cloudflare, or delete existing SQLite data.
-#define AppVersion "0.0.1"
+#include "version.iss"
 [Setup]
 AppId=LKH-MCP-Native
 AppName=LKH MCP
@@ -9,12 +9,13 @@ AppVersion={#AppVersion}
 AppPublisher=LKH
 DefaultDirName={autopf}\LKH MCP
 DefaultGroupName=LKH MCP
-OutputBaseFilename=LKH-MCP-Setup-UNSIGNED
+OutputBaseFilename=LKH-MCP-Setup-{#AppVersion}-UNSIGNED
 OutputDir=..\dist\installer
 SetupIconFile=..\assets\lkh-mcp.ico
 Compression=lzma2
 SolidCompression=yes
 PrivilegesRequired=admin
+UninstallLogging=yes
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 WizardStyle=modern
@@ -23,14 +24,21 @@ ChangesEnvironment=no
 DisableDirPage=no
 UsePreviousAppDir=yes
 CloseApplications=yes
+RestartApplications=no
 
 [Files]
+Source: "..\dist\skills-python\*"; DestDir: "{app}\skills-python"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\scripts\install-public-skills.py"; DestDir: "{app}\scripts"; Flags: ignoreversion
+Source: "..\scripts\native-uiux.py"; DestDir: "{app}\scripts"; Flags: ignoreversion
+Source: "..\scripts\native-graphify.py"; DestDir: "{app}\scripts"; Flags: ignoreversion
+Source: "..\src\public_skills.py"; DestDir: "{app}\scripts"; Flags: ignoreversion
 Source: "..\dist\LKH-MCP-Server\*"; DestDir: "{app}\LKH-MCP-Server"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\dist\LKH-MCP-Service\*"; DestDir: "{app}\LKH-MCP-Service"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\dist\LKH-MCP-Tray\*"; DestDir: "{app}\LKH-MCP-Tray"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\dist\LKH-Codex-Agent\*"; DestDir: "{app}\agent"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\dist\LKH-MCP-Enroll\*"; DestDir: "{app}\LKH-MCP-Enroll"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\dist\LKH-MCP-Admin-Setup\*"; DestDir: "{app}\LKH-MCP-Admin-Setup"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\scripts\native-install-state.ps1"; DestDir: "{app}\scripts"; Flags: ignoreversion
 Source: "..\scripts\native-installer-preflight.ps1"; DestDir: "{app}\scripts"; Flags: ignoreversion
 Source: "..\scripts\native-upgrade-preflight.ps1"; DestDir: "{app}\scripts"; Flags: ignoreversion
 Source: "..\scripts\install-agent-task.ps1"; DestDir: "{app}\scripts"; Flags: ignoreversion
@@ -38,25 +46,45 @@ Source: "..\scripts\native-uninstall.ps1"; DestDir: "{app}\scripts"; Flags: igno
 Source: "..\dist\LKH-MCP-DB-Backup\*"; DestDir: "{app}\LKH-MCP-DB-Backup"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\windows_agent\config.example.json"; DestDir: "{commonappdata}\LKH-MCP\config"; DestName: "agent.example.json"; Flags: onlyifdoesntexist uninsneveruninstall
 
+[InstallDelete]
+Type: files; Name: "{group}\LKH MCP Tray.lnk"
+
 [Icons]
-Name: "{group}\LKH MCP Tray"; Filename: "{app}\LKH-MCP-Tray\LKH-MCP-Tray.exe"
-Name: "{group}\Open LKH MCP Admin"; Filename: "http://127.0.0.1:8001/admin"
-Name: "{group}\Uninstall LKH MCP"; Filename: "{uninstallexe}"
+Name: "{group}\LKH MCP"; Filename: "{app}\LKH-MCP-Tray\LKH-MCP-Tray.exe"; Parameters: "--start-server"
+Name: "{group}\Open LKH MCP Admin"; Filename: "{code:GetAdminUrl}"
+Name: "{group}\Uninstall LKH MCP"; Filename: "{uninstallexe}"; Parameters: "/LOG"
 
 [Run]
-Filename: "{app}\LKH-MCP-Tray\LKH-MCP-Tray.exe"; Description: "Start Pixel Pig tray"; Flags: nowait postinstall skipifsilent runasoriginaluser
+Filename: "{app}\LKH-MCP-Tray\LKH-MCP-Tray.exe"; Parameters: "--start-server"; Description: "Start LKH MCP"; Flags: nowait postinstall skipifsilent runasoriginaluser; Check: CanLaunchInstalledTray
 
 ; Native removal handled by checked [Code] hook; no unchecked automatic uninstall actions.
 
 [Code]
 var
+  InstallationBegun, InstallationSucceeded: Boolean;
+  NetworkPage: TInputQueryWizardPage;
   AdminPage: TInputQueryWizardPage;
   AgentPage: TInputQueryWizardPage;
   ProjectPage: TInputQueryWizardPage;
 
 procedure InitializeWizard;
+var
+  NetworkFile: String;
 begin
-  AdminPage := CreateInputQueryPage(wpSelectDir,
+  NetworkFile := ExpandConstant('{commonappdata}\LKH-MCP\config\network.ini');
+  NetworkPage := CreateInputQueryPage(wpSelectDir,
+    'LKH MCP network', 'Choose the MCP IP address and ports',
+    'Use an IPv4 address assigned to this PC, or 127.0.0.1 for local access. Administrator access stays on 127.0.0.1. Existing settings are loaded below.');
+  NetworkPage.Add('MCP IPv4 address:', False);
+  NetworkPage.Add('MCP port (1-65535):', False);
+  NetworkPage.Add('Local administrator port (1-65535):', False);
+  NetworkPage.Values[0] := GetIniString('network', 'host', '127.0.0.1', NetworkFile);
+  NetworkPage.Values[1] := GetIniString('network', 'mcp_port', '8000', NetworkFile);
+  NetworkPage.Values[2] := GetIniString('network', 'admin_port', '8001', NetworkFile);
+  NetworkPage.Edits[0].MaxLength := 15;
+  NetworkPage.Edits[1].MaxLength := 5;
+  NetworkPage.Edits[2].MaxLength := 5;
+  AdminPage := CreateInputQueryPage(NetworkPage.ID,
     'LKH MCP administrator', 'Create your administrator account',
     'First installation only. Existing credentials are preserved. Oracle connections are managed after installation.');
   AdminPage.Add('Administrator account:', False);
@@ -80,6 +108,46 @@ begin
   ProjectPage.Values[0] := 'LKH_MCP';
   ProjectPage.Values[1] := 'gyangho/LKH_MCP';
   ProjectPage.Values[2] := '';
+end;
+
+function GetAdminUrl(Param: String): String;
+begin
+  Result := 'http://127.0.0.1:' + Trim(NetworkPage.Values[2]) + '/admin';
+end;
+
+function ValidNetwork(): Boolean;
+var
+  Host, Part: String;
+  I, Octets, FirstOctet, Number, McpPort, AdminPort: Integer;
+begin
+  Result := False;
+  Host := Trim(NetworkPage.Values[0]);
+  Part := '';
+  Octets := 0;
+  FirstOctet := -1;
+  for I := 1 to Length(Host) + 1 do begin
+    if (I > Length(Host)) or (Copy(Host, I, 1) = '.') then begin
+      Number := StrToIntDef(Part, -1);
+      if (Part = '') or (Number < 0) or (Number > 255) then Exit;
+      if (Length(Part) > 1) and (Copy(Part, 1, 1) = '0') then Exit;
+      if Octets = 0 then FirstOctet := Number;
+      Octets := Octets + 1;
+      Part := '';
+    end else begin
+      if Pos(Copy(Host, I, 1), '0123456789') = 0 then Exit;
+      Part := Part + Copy(Host, I, 1);
+    end;
+  end;
+  McpPort := StrToIntDef(Trim(NetworkPage.Values[1]), -1);
+  AdminPort := StrToIntDef(Trim(NetworkPage.Values[2]), -1);
+  Result := (Octets = 4) and (Host <> '0.0.0.0') and
+    (Host <> '255.255.255.255') and ((FirstOctet < 224) or (FirstOctet > 239)) and
+    (McpPort >= 1) and (McpPort <= 65535) and
+    (AdminPort >= 1) and (AdminPort <= 65535) and (McpPort <> AdminPort);
+  for I := 1 to Length(Trim(NetworkPage.Values[1])) do
+    if Pos(Copy(Trim(NetworkPage.Values[1]), I, 1), '0123456789') = 0 then Result := False;
+  for I := 1 to Length(Trim(NetworkPage.Values[2])) do
+    if Pos(Copy(Trim(NetworkPage.Values[2]), I, 1), '0123456789') = 0 then Result := False;
 end;
 
 function GetAgentUser(Param: String): String;
@@ -117,6 +185,10 @@ var
   AccountName, Checkout: String;
 begin
   Result := True;
+  if (CurPageID = NetworkPage.ID) and (not ValidNetwork()) then begin
+    MsgBox('Enter a specific IPv4 address and two different ports from 1 to 65535.', mbError, MB_OK);
+    Result := False;
+  end;
   if CurPageID = AdminPage.ID then begin
     if (Length(AdminPage.Values[1]) < 14) or
        (AdminPage.Values[1] <> AdminPage.Values[2]) or
@@ -165,14 +237,46 @@ begin
   Result := (PageID = AdminPage.ID) and AdministratorConfigured();
 end;
 
+function CanLaunchInstalledTray(): Boolean;
+begin
+  Result := InstallationSucceeded;
+end;
+
+function RunInstallPhase(Phase: String): Boolean;
+var
+  Helper, Params: String;
+  ExitCode: Integer;
+begin
+  Helper := ExpandConstant('{tmp}\native-install-state.ps1');
+  if not FileExists(Helper) then ExtractTemporaryFile('native-install-state.ps1');
+  Params := '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' + Helper +
+    '" -Action ' + Phase + ' -InstallDir "' + ExpandConstant('{app}') + '" -Version "{#AppVersion}"';
+  ExitCode := -1;
+  Result := Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
+                 Params, '', SW_HIDE, ewWaitUntilTerminated, ExitCode);
+  Result := Result and (ExitCode = 0);
+end;
+
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 begin
   Result := '';
+  if not ValidNetwork() then begin
+    Result := 'Provide a valid MCP IPv4 address and two different ports from 1 to 65535.';
+    Exit;
+  end;
   if not AdministratorConfigured() then begin
     if (Length(AdminPage.Values[1]) < 14) or
        (AdminPage.Values[1] <> AdminPage.Values[2]) or
        (not ValidAdministratorName(Trim(AdminPage.Values[0]))) then
       Result := 'First installation requires administrator credentials in the interactive wizard.';
+  end;
+  if Result <> '' then Exit;
+  if not InstallationBegun then begin
+    if not RunInstallPhase('begin') then begin
+      Result := 'Cannot prepare installation. Check active work, service/task ownership and permissions.';
+      Exit;
+    end;
+    InstallationBegun := True;
   end;
 end;
 
@@ -240,9 +344,30 @@ begin
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
+var
+  RegistrationCommand, FailureText: String;
 begin
   if CurStep <> ssPostInstall then Exit;
+  InstallationSucceeded := False;
+  try
+  { Public executable resources stay administrator-owned even in a custom install directory. }
+  ForceDirectories(ExpandConstant('{app}\skills'));
+  RunRequired(ExpandConstant('{sys}\icacls.exe'),
+    '"' + ExpandConstant('{app}\skills') + '" /inheritance:r /grant:r "*S-1-5-32-544:(OI)(CI)F" "*S-1-5-18:(OI)(CI)F" "*S-1-5-19:(OI)(CI)RX" "*S-1-5-32-545:(OI)(CI)RX"',
+    'Public skill resource permissions failed.');
+  WizardForm.StatusLabel.Caption := 'Downloading latest stable public skill releases and preparing their dependencies...';
+  RunRequired(ExpandConstant('{app}\skills-python\python.exe'),
+    '-I "' + ExpandConstant('{app}\scripts\install-public-skills.py') + '"',
+    'Public skill download failed. See skills\install-status.json in the installation folder, then retry installation.');
   InitializeAdministrator;
+  RunRequired(ExpandConstant('{app}\LKH-MCP-Admin-Setup\LKH-MCP-Admin-Setup.exe'),
+    '--configure-network --host "' + Trim(NetworkPage.Values[0]) +
+    '" --mcp-port "' + Trim(NetworkPage.Values[1]) +
+    '" --admin-port "' + Trim(NetworkPage.Values[2]) + '"', 'Network configuration failed.');
+  { Non-secret port discovery for the interactive tray; credentials remain private. }
+  RunRequired(ExpandConstant('{sys}\icacls.exe'),
+    '"' + ExpandConstant('{commonappdata}\LKH-MCP\config\network.ini') +
+    '" /grant:r "*S-1-5-32-545:R"', 'Network configuration read permission failed.');
   RunRequired(ExpandConstant('{app}\LKH-MCP-Enroll\LKH-MCP-Enroll.exe'),
     '--provision', 'Device enrollment failed.');
   RunRequired(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
@@ -250,12 +375,42 @@ begin
     ExpandConstant('{app}\scripts\install-agent-task.ps1') + '" -InstallDir "' +
     ExpandConstant('{app}') + '" -AgentUser "' + GetAgentUser('') +
     '" -ProjectAlias "' + GetProjectAlias('') + '" -Repository "' + GetRepository('') +
-    '" -CheckoutPath "' + GetCheckoutPath('') + '"', 'Agent task registration failed.');
+    '" -CheckoutPath "' + GetCheckoutPath('') + '" -AdminPort ' +
+    Trim(NetworkPage.Values[2]), 'Agent task registration failed.');
+  if GetCheckoutPath('') <> '' then
+    RunRequired(ExpandConstant('{app}\LKH-MCP-Admin-Setup\LKH-MCP-Admin-Setup.exe'),
+      '--configure-project --project-alias "' + GetProjectAlias('') +
+      '" --repository "' + GetRepository('') + '"', 'Server project approval failed.');
+  if RegKeyExists(HKLM, 'SYSTEM\CurrentControlSet\Services\LKH-MCP-Server') then
+    RegistrationCommand := '--startup demand --username "NT AUTHORITY\LocalService" update'
+  else
+    RegistrationCommand := '--startup demand --username "NT AUTHORITY\LocalService" install';
   RunRequired(ExpandConstant('{app}\LKH-MCP-Service\LKH-MCP-Service.exe'),
-    '--startup auto --username "NT AUTHORITY\LocalService" install',
-    'LKH MCP service registration failed.');
+    RegistrationCommand, 'LKH MCP service registration failed.');
+  if not RunInstallPhase('activate') then RaiseException('Service activation preparation failed. Details: ' + ExpandConstant('{commonappdata}\LKH-MCP\logs\installer-activate.json'));
   RunRequired(ExpandConstant('{app}\LKH-MCP-Service\LKH-MCP-Service.exe'),
     '--wait 30 start', 'LKH MCP service startup failed.');
+  if not RunInstallPhase('ready') then RaiseException('Installation completion check failed.');
+  InstallationSucceeded := True;
+  except
+    FailureText := GetExceptionMessage;
+    if not RunInstallPhase('fail') then Log('Failed to stop all installation-owned components; startup gate remains blocked.');
+    RaiseException('Installation failed; automatic startup blocked. ' + FailureText);
+  end;
+end;
+
+procedure DeinitializeSetup;
+begin
+  if InstallationBegun and not InstallationSucceeded then
+    if not RunInstallPhase('fail') then Log('Installation cleanup incomplete; startup gate remains blocked.');
+end;
+
+procedure CurPageChanged(CurPageID: Integer);
+begin
+  if (CurPageID = wpFinished) and not InstallationSucceeded then begin
+    WizardForm.FinishedHeadingLabel.Caption := 'LKH MCP 설치 미완료';
+    WizardForm.FinishedLabel.Caption := '설치가 완료되지 않아 서버와 트레이의 실행을 차단했습니다. 오류를 해결한 뒤 설치를 다시 실행하세요.';
+  end;
 end;
 
 { Uninstaller default: remove program and settings, preserve SQLite/WAL/logs/backups. }
@@ -359,7 +514,11 @@ end;
 function InitializeUninstall(): Boolean;
 begin
   RemovalMode := 'settings';
-  Result := True;
+  Result := IsAdminInstallMode;
+  if not Result then begin
+    MsgBox('관리자 권한으로 제거 프로그램을 실행하고 Windows UAC 요청을 승인하세요.', mbCriticalError, MB_OK);
+    Exit;
+  end;
   { Silent uninstall always keeps SQLite and backups. }
   if not UninstallSilent() then begin
     if not SelectUninstallMode() then begin
@@ -383,5 +542,10 @@ begin
         mbCriticalError, MB_OK);
       Abort;
     end;
+  end else if (CurUninstallStep = usPostUninstall) and not UninstallSilent() then begin
+    MsgBox('기본 삭제에서는 ProgramData\LKH-MCP의 SQLite DB, 로그, 백업을 보존합니다.' + #13#10 +
+      '완전 삭제에서도 ProgramData\LKH-MCP-RemovalBackups의 복구 사본은 보존합니다.' + #13#10 +
+      '삭제할 수 없는 파일 경고가 있었다면 제거 로그의 해당 경로를 확인하세요: ' + ExpandConstant('{log}'),
+      mbInformation, MB_OK);
   end;
 end;

@@ -2,8 +2,8 @@
   "openapi": "3.0.3",
   "info": {
     "title": "LKH MCP Oracle connections and repository approvals",
-    "version": "1.0.0",
-    "description": "Private administrator session required. Writes and connection tests require exact Origin/Host, JSON and X-LKH-Admin-Action: 1. Never returns passwords. Common Oracle Client mode/path is configured separately and requires restart. Repository approval changes cancel queued jobs; running jobs block changes. Agent local configuration is separate."
+    "version": "1.1.0",
+    "description": "Private administrator session required. Writes and repository checks require exact Origin/Host and X-LKH-Admin-Action: 1. Repository bindings select an Agent and an absolute path on that PC. Agents poll for assigned configuration; checks use scoped leases and return fixed status codes only. Changes cancel queued jobs and invalidate old check results; running jobs block execution-binding changes. Public skill source is downloaded from GitHub latest stable releases at installation."
   },
   "servers": [
     {
@@ -598,6 +598,177 @@
           }
         }
       }
+    },
+    "/admin/api/repositories/{ident}/test": {
+      "post": {
+        "summary": "Queue a read-only check on the repository-bound Agent. Does not fetch, pull or modify checkout. Expires after 180 seconds.",
+        "parameters": [
+          {
+            "name": "ident",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "revision": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                },
+                "required": [
+                  "revision"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Queued; poll GET repositories for the result."
+          },
+          "400": {
+            "description": "Missing Agent/path or invalid request"
+          },
+          "401": {
+            "description": "Session required"
+          },
+          "403": {
+            "description": "Origin/CSRF denied or Agent disabled"
+          },
+          "404": {
+            "description": "Unknown repository"
+          },
+          "409": {
+            "description": "Stale revision or another check in progress"
+          }
+        }
+      }
+    },
+    "/admin/agent/repositories": {
+      "post": {
+        "summary": "Agent configuration sync and leased connection-check result reporting. Paths are returned only on this authenticated Agent API.",
+        "security": [
+          {
+            "agentBearer": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "agent_id": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "agent_id"
+                    ]
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "agent_id": {
+                        "type": "string"
+                      },
+                      "check_id": {
+                        "type": "string"
+                      },
+                      "lease": {
+                        "type": "string"
+                      },
+                      "code": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "agent_id",
+                      "check_id",
+                      "lease",
+                      "code"
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Assigned projects, legacy-approved aliases and at most one leased check, or result acknowledgement."
+          },
+          "400": {
+            "description": "Invalid payload or fixed result code"
+          },
+          "401": {
+            "description": "Agent Bearer required"
+          },
+          "403": {
+            "description": "Invalid, expired or changed connection-check lease"
+          }
+        }
+      }
+    },
+    "/admin/healthz": {
+      "get": {
+        "summary": "Native loopback process liveness during installation/startup; normal MCP/Agent requests stay blocked until installation is ready.",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Native server process is listening. Installer also checks version, PID and SCM parent before completing installation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "ok"
+                      ]
+                    },
+                    "application": {
+                      "type": "string",
+                      "enum": [
+                        "LKH-MCP"
+                      ]
+                    },
+                    "version": {
+                      "type": "string"
+                    },
+                    "pid": {
+                      "type": "integer",
+                      "minimum": 1
+                    }
+                  },
+                  "required": [
+                    "status",
+                    "application",
+                    "version",
+                    "pid"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -606,6 +777,10 @@
         "type": "apiKey",
         "in": "cookie",
         "name": "lkh_admin_session"
+      },
+      "agentBearer": {
+        "type": "http",
+        "scheme": "bearer"
       }
     },
     "schemas": {
@@ -828,11 +1003,24 @@
             "type": "string",
             "maxLength": 140,
             "description": "GitHub owner/repository, not a URL or local path"
+          },
+          "agent_id": {
+            "type": "string",
+            "maxLength": 40,
+            "pattern": "^[A-Za-z0-9_-]{1,40}$",
+            "description": "Selected Agent identity; existing migrated entries may be unbound."
+          },
+          "local_path": {
+            "type": "string",
+            "maxLength": 1024,
+            "description": "Absolute local Windows Git checkout root on the selected Agent. UNC and traversal paths are rejected."
           }
         },
         "required": [
           "alias",
-          "repository"
+          "repository",
+          "agent_id",
+          "local_path"
         ],
         "additionalProperties": false
       },
@@ -851,12 +1039,25 @@
           "revision": {
             "type": "integer",
             "minimum": 1
+          },
+          "agent_id": {
+            "type": "string",
+            "maxLength": 40,
+            "pattern": "^[A-Za-z0-9_-]{1,40}$",
+            "description": "Selected Agent identity; existing migrated entries may be unbound."
+          },
+          "local_path": {
+            "type": "string",
+            "maxLength": 1024,
+            "description": "Absolute local Windows Git checkout root on the selected Agent. UNC and traversal paths are rejected."
           }
         },
         "required": [
           "alias",
           "repository",
-          "revision"
+          "revision",
+          "agent_id",
+          "local_path"
         ],
         "additionalProperties": false
       },
@@ -883,6 +1084,44 @@
           },
           "cancelled_jobs": {
             "type": "integer"
+          },
+          "agent_id": {
+            "type": "string",
+            "maxLength": 40,
+            "pattern": "^[A-Za-z0-9_-]{1,40}$",
+            "description": "Selected Agent identity; existing migrated entries may be unbound."
+          },
+          "local_path": {
+            "type": "string",
+            "maxLength": 1024,
+            "description": "Absolute local Windows Git checkout root on the selected Agent. UNC and traversal paths are rejected."
+          },
+          "connection_check": {
+            "type": "object",
+            "properties": {
+              "status": {
+                "type": "string",
+                "enum": [
+                  "not_checked",
+                  "pending",
+                  "running",
+                  "succeeded",
+                  "failed"
+                ]
+              },
+              "code": {
+                "type": "string"
+              },
+              "checked_at": {
+                "type": "integer",
+                "nullable": true
+              }
+            },
+            "required": [
+              "status",
+              "code",
+              "checked_at"
+            ]
           }
         },
         "required": [
@@ -890,7 +1129,10 @@
           "alias",
           "repository",
           "revision",
-          "updated_at"
+          "updated_at",
+          "agent_id",
+          "local_path",
+          "connection_check"
         ],
         "additionalProperties": false
       }
