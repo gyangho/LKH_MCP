@@ -85,5 +85,6 @@ def required_assets(root: Path | None = None) -> dict[str, bool]:
         "admin_html": base / "web" / "dist" / "index.html",
         "uiux_search": base / "vendor" / "ui-ux-pro-max-skill"
                        / "src" / "ui-ux-pro-max" / "scripts" / "search.py",
+        "engineering_skills": base / "vendor" / "mattpocock-skills" / ".lkh-pinned-revision",
     }
     return {name: file.is_file() for name, file in paths.items()}

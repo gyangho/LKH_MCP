@@ -4,6 +4,7 @@
 
 ## 서버와 관리자
 
+- 서버 중앙형 Matt Pocock 개발 스킬 조회 도구 4종과 작업 유형 라우팅을 제공한다. Windows Agent verify/diagnose/fix는 서버 문서 주입을 요구하고, 구버전 Agent 또는 서버 스킬 누락 시 실행하지 않는다. 실행·배포 검증은 [중앙 개발 스킬](ENGINEERING_SKILLS.md)을 참조한다.
 - MCP Streamable HTTP와 React 관리자 화면을 제공한다. Oracle 기능은 허용된 테이블에 대한 제한적 조회이며 접속 자격증명과 허용 목록이 필요하다. UI UX Pro Max 검색은 vendor 자산을 사용한다.
 - 설정은 SQLite에 저장하고 허용된 비밀 설정은 bootstrap/환경에서 읽는다. 관리자 변경에는 세션, Origin/Host와 CSRF 검사를 사용한다. 세부 경로는 [빌드 및 설정](BUILD_AND_CONFIGURATION.md).
 - Codex Agent는 heartbeat와 lease 기반 큐를 사용한다. 승인된 저장소, 정확한 SHA, clean checkout과 임시 worktree를 검사하며 verify·diagnose·graphify 및 승인된 fix 제안을 지원한다. 원본 checkout에 자동 commit/push하지 않는다. 실패한 비-fix 작업의 수동 재시도는 새 작업으로 생성한다.

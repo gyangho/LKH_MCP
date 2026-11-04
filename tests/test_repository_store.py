@@ -18,6 +18,8 @@ class RepositoryTests(unittest.TestCase):
         self.path = Path(folder.name) / "state.sqlite3"
         for p in (patch.dict(os.environ, {"MCP_DB_PATH": str(self.path), "MCP_BOOTSTRAP_FILE": str(Path(folder.name)/"none")}, clear=True), patch("dotenv.load_dotenv", return_value=False)):
             p.start(); self.addCleanup(p.stop)
+        guidance_patch = patch("engineering_skills.agent_guidance", return_value="Mocked central skill")
+        guidance_patch.start(); self.addCleanup(guidance_patch.stop)
         settings_store._READY = False
         self.addCleanup(lambda: setattr(settings_store, "_READY", False))
         settings_store.initialize()

@@ -91,3 +91,12 @@ P0–P2 관련 회귀는 `tests/test_p0_p2_hardening.py`에 있으며 독립 RBA
 
 - `fix/native-tray-background-shutdown`의 COM 초기화·실제 중지 확인·제거 옵션 UI를 종료 안내 및 서비스 등록 수정과 통합. main에서 통합 삭제한 구 문서는 복원하지 않았다.
 - 통합 후 서비스/트레이/제거 계약 테스트 25개 및 host 테스트 8개 PASS. 성공 시 SCM STOPPED 확인 후 트레이를 종료하며 실패 시 원인별 전면 대화상자를 유지한다. 이전 종료 요청 성공 안내는 이 동작으로 대체된다. 빌드·설치·실제 UAC/SCM 및 제거 UI는 미검증.
+
+
+## 2026-11-04 서버 중앙형 개발 스킬 (Matt Pocock)
+
+- 개발 브랜치 `codex/feature/mcp-central-skills-20261104`, upstream `mattpocock/skills@4ae2317ddb22b046e26455e4f9c9b3aaaf62212d`. 클라이언트별 플러그인 설치 없이 서버에만 pinned 자료를 둔다.
+- [Python CI](https://github.com/gyangho/LKH_MCP/actions/runs/41811191421) 성공: Python compileall, 단위·회귀 테스트 **187개 PASS**, 프런트엔드 빌드 성공. 통합 테스트에는 등록/경로 제한/우선 정책/큐 자동 주입/미설치 시 큐 보류/구버전 Agent 거부/Windows prompt 전달이 포함된다.
+- [Windows Native CI](https://github.com/gyangho/LKH_MCP/actions/runs/41811191728) 성공: pinned upstream 서버 설치, PowerShell 구문 검사, Native 테스트 **72개 PASS**, unsigned 실행 파일 번들/설치기 빌드, loopback 포트 분리·DPAPI·SCM·작업 스케줄러·복구 테스트 PASS. 실제 Native 서버로 MCP 조회 스모크 실행: `CENTRAL_MCP_SKILLS_SMOKE_OK 27 4ae2317ddb22b046e26455e4f9c9b3aaaf62212d`.
+- CI runner의 격리된 Windows 가상 머신 기준이며 운영 MCP 서버, Portal 실제 연결, 실제 사용자 Codex CLI의 수락 테스트나 배포 성공을 증명하지 않는다. 서버/Agent를 운영 전환하거나 생산 DB/라우팅을 변경하지 않았다.
+- 실제 단계별 검증과 권한 제약은 [중앙 개발 스킬](ENGINEERING_SKILLS.md)의 수락 테스트 절차를 따를 것.

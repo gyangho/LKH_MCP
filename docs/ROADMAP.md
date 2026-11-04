@@ -100,3 +100,11 @@ I 트랙 기본 선행: `I0→I1→I2→I3→I4→I5→I6→I7`. I5 인증 설�
 ### 2026-11-02 서비스 등록 오류 처리
 
 서비스 클래스 탐색과 CLI 종료 코드 전달을 수정하고 설치기가 필수 단계 실패를 검사하도록 변경. 서비스/트레이 회귀 18개 통과. 빌드 및 실제 SCM 설치·시작은 미검증으로 기존 Native 출시 게이트는 유지한다.
+
+
+## 2026-11-04 중앙 엔지니어링 스킬 통합
+
+- **IMPLEMENTED(CI):** Matt Pocock upstream commit `4ae2317d`를 LKH MCP 서버에만 버전 고정으로 설치하는 Windows/Linux 스크립트와 읽기 전용 MCP 스킬 조회, 자동 작업별 흐름 선별.
+- **IMPLEMENTED(CI):** Windows Agent verify/diagnose/fix 작업에 서버 제공 스킬 문서 자동 주입. 버전 1 프로토콜이 없는 Agent와 스킬 미설치 상황은 fail closed. 원본 커밋·push 자동 지시보다 사용자 승인 정책 우선.
+- **CI 검증:** [Python 187 PASS](https://github.com/gyangho/LKH_MCP/actions/runs/41811191421), [Windows Native 72 PASS + 라이브 MCP 스모크(27개 스킬) + unsigned Installer](https://github.com/gyangho/LKH_MCP/actions/runs/41811191728).
+- **VERIFIED(Windows E2E) / RELEASED(운영): 미완료.** 실제 LKH MCP 서비스 반영·고객 Windows Agent 업데이트·Cloudflare 연결·Codex E2E는 별도 승인과 실환경 검증 필요. 사용자의 staging 수락 테스트 전까지 운영 반영으로 표시하지 않는다.
