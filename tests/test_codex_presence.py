@@ -29,6 +29,7 @@ class PresenceTests(unittest.TestCase):
         self.settings = {"CODEX_AGENT_ENABLED": True,
                          "CODEX_MAX_RUNS_PER_DAY": 30}
         for patcher in [
+            patch("engineering_skills.agent_guidance", return_value="Mocked central skill"),
             patch.object(bridge, "_allowed", return_value={"LKH_MCP": "gyangho/LKH_MCP"}),
             patch.object(bridge.settings_store, "get", side_effect=lambda k: self.settings[k]),
             patch.object(bridge.settings_store, "_connect",

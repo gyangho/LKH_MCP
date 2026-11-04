@@ -1,7 +1,7 @@
 name: Windows native suite build (I1-I7 staging)
 on:
   push:
-    branches: [refac]
+    branches: [refac, 'codex/**']
     paths:
       - 'src/**'
       - 'tests/**'
@@ -46,6 +46,7 @@ jobs:
         shell: pwsh
         run: |
           foreach ($name in @("build-native-server.ps1", "build-native-suite.ps1",
+                              "install-matt-skills.ps1",
                               "install-agent-task.ps1", "native-installer-preflight.ps1",
                                "native-uninstall.ps1",
                               "native-upgrade-preflight.ps1")) {
@@ -57,6 +58,9 @@ jobs:
               throw "PowerShell syntax error in $name : $($errors[0])"
             }
           }
+      - name: Stage pinned engineering skills on MCP build host
+        shell: pwsh
+        run: ./scripts/install-matt-skills.ps1
       - name: I1 native configuration unit tests
         shell: pwsh
         run: |

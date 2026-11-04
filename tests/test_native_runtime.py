@@ -87,15 +87,18 @@ class NativeRuntimeTests(unittest.TestCase):
 
     def test_asset_checks_are_explicit(self):
         self.assertEqual(native_runtime.required_assets(self.root),
-                         {"admin_html": False, "uiux_search": False})
+                         {"admin_html": False, "uiux_search": False, "engineering_skills": False})
         html = self.root / "web" / "dist" / "index.html"
         uiux = self.root / "vendor" / "ui-ux-pro-max-skill" / "src" / "ui-ux-pro-max" / "scripts" / "search.py"
         html.parent.mkdir(parents=True)
         uiux.parent.mkdir(parents=True)
         html.write_text("ok", encoding="utf-8")
         uiux.write_text("ok", encoding="utf-8")
+        marker = self.root / "vendor" / "mattpocock-skills" / ".lkh-pinned-revision"
+        marker.parent.mkdir(parents=True)
+        marker.write_text("4ae2317ddb22b046e26455e4f9c9b3aaaf62212d", encoding="ascii")
         self.assertEqual(native_runtime.required_assets(self.root),
-                         {"admin_html": True, "uiux_search": True})
+                         {"admin_html": True, "uiux_search": True, "engineering_skills": True})
 
 
 if __name__ == "__main__":

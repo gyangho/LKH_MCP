@@ -23,7 +23,8 @@ class BridgeTests(unittest.TestCase):
             'CODEX_AGENT_ENABLED': True,
             'CODEX_MAX_RUNS_PER_DAY': 30,
         }
-        patches = [patch.object(bridge, '_allowed', return_value={'ITAM':'gyangho/ITAM', 'LKH_MCP':'gyangho/LKH_MCP'}),
+        patches = [patch("engineering_skills.agent_guidance", return_value="Mocked central skill"),
+                   patch.object(bridge, '_allowed', return_value={'ITAM':'gyangho/ITAM', 'LKH_MCP':'gyangho/LKH_MCP'}),
                    patch.object(bridge.settings_store, 'get', side_effect=lambda k: self.settings[k]),
                    patch.object(bridge.settings_store, '_connect', side_effect=lambda: sqlite3.connect(self.db))]
         for p in patches:
