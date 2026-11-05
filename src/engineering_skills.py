@@ -5,6 +5,7 @@ Repository content is procedural reference data and never carries authorization.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -33,14 +34,71 @@ POLICY = (
     "Report code, integration, test execution, and production application independently."
 )
 
+# Descriptive plans, not an authorization to invoke scripts or modify an issue tracker.
+# Each phase has a reviewable exit condition: fetching SKILL.md alone does not pass it.
+WORKFLOW_PHASES: dict[str, tuple[dict, ...]] = {
+    "feature": (
+        {"phase": "discover", "skills": ["domain-modeling"],
+         "gate": "Existing behavior, domain language, ADRs, and affected code inspected."},
+        {"phase": "specify", "skills": ["to-spec", "to-tickets"],
+         "gate": "User-visible acceptance criteria, vertical slices, dependencies and out-of-scope recorded."},
+        {"phase": "implement", "skills": ["implement-spec"],
+         "gate": "Every unblocked approved slice is integrated end-to-end; blocked slices are explicitly reported."},
+        {"phase": "review", "skills": ["code-review"],
+         "gate": "Standards and specification reviewed independently; significant findings resolved or disclosed."},
+        {"phase": "verify", "skills": [],
+         "gate": "Actual build, regression, integration and required environment checks executed or marked blocked."},
+    ),
+    "feature-small": (
+        {"phase": "discover", "skills": ["domain-modeling"], "gate": "Scope and existing behavior inspected."},
+        {"phase": "implement", "skills": ["tdd", "implement"],
+         "gate": "A small complete user-visible change, with its acceptance checks, is implemented."},
+        {"phase": "review", "skills": ["code-review"], "gate": "Standards and requested behavior reviewed."},
+        {"phase": "verify", "skills": [], "gate": "Relevant tests actually executed or blocker documented."},
+    ),
+    "bugfix": (
+        {"phase": "reproduce", "skills": ["diagnosing-bugs"],
+         "gate": "A symptom-specific red-capable feedback loop and minimal reproduction, or an explicit blocker."},
+        {"phase": "fix", "skills": ["tdd"],
+         "gate": "Root-cause hypothesis checked, fix targeted, and regression signal turned green."},
+        {"phase": "review", "skills": ["code-review"], "gate": "Standards and symptom-fix contract reviewed."},
+        {"phase": "verify", "skills": [], "gate": "Original reproduction and regression checks rerun."},
+    ),
+    "verify": (
+        {"phase": "plan", "skills": ["tdd"],
+         "gate": "Behavioral acceptance boundaries and requested commands selected; do not edit source."},
+        {"phase": "verify", "skills": [],
+         "gate": "Commands, environment, test counts, failures and skipped checks reported separately."},
+    ),
+    "review": (
+        {"phase": "review", "skills": ["code-review"],
+         "gate": "Fixed point, diff, standards and originating specification independently checked."},
+        {"phase": "report", "skills": [], "gate": "Findings have location, impact and evidence."},
+    ),
+    "planning": (
+        {"phase": "specify", "skills": ["to-spec", "to-tickets"],
+         "gate": "Acceptance criteria, independent vertical slices and blocking edges documented."},
+        {"phase": "report", "skills": [], "gate": "Approval-dependent publication left pending until authorized."},
+    ),
+    "architecture": (
+        {"phase": "model", "skills": ["domain-modeling", "codebase-design"],
+         "gate": "Current architecture, domain boundaries, contracts, ADRs and tradeoffs checked."},
+        {"phase": "report", "skills": [], "gate": "Design decisions and migration/verification risks recorded."},
+    ),
+    "research": (
+        {"phase": "research", "skills": ["research"],
+         "gate": "Source quality, alternatives and unresolved assumptions documented."},
+    ),
+}
 WORKFLOWS: dict[str, tuple[str, ...]] = {
-    "feature": ("domain-modeling", "tdd", "code-review"),
-    "bugfix": ("diagnosing-bugs", "tdd", "code-review"),
-    "verify": ("tdd",),
-    "review": ("code-review",),
-    "planning": ("to-spec", "to-tickets"),
-    "architecture": ("domain-modeling", "codebase-design"),
-    "research": ("research",),
+    kind: tuple(dict.fromkeys(skill for phase in phases for skill in phase["skills"]))
+    for kind, phases in WORKFLOW_PHASES.items()
+}
+COMPLETION_GATES = {
+    "code": "Sources, configuration and documentation actually changed as required.",
+    "integration": "Requested end-to-end behavior is wired into the real service; mocks or scaffolding do not count.",
+    "tests": "Executed commands, environment, pass/fail/skip counts and unrun checks are evidenced.",
+    "production": "Deployment and production validation require separate authorization and evidence.",
 }
 AGENT_SKILLS = {
     "verify": ("tdd",),
@@ -146,8 +204,14 @@ def workflow(task_type: str) -> dict:
     steps = WORKFLOWS[task_type]
     if not set(steps).issubset(available):
         raise RuntimeError("Required engineering skill unavailable")
-    return {"task_type": task_type, "steps": list(steps), "priority_policy": POLICY,
-            "next": "Read each applicable skill via engineering_skill_get before development."}
+    return {
+        "task_type": task_type, "source": SOURCE, "revision": REVISION,
+        "steps": list(steps), "phases": list(WORKFLOW_PHASES[task_type]),
+        "completion_gates": COMPLETION_GATES,
+        "priority_policy": POLICY,
+        "next": ("Read every selected engineering_skill_get document. Execute phases against the "
+                 "actual repository; record evidence and blocked gates. Workflow selection is not execution."),
+    }
 
 
 def agent_guidance(kind: str) -> str:
@@ -155,7 +219,18 @@ def agent_guidance(kind: str) -> str:
     skills = AGENT_SKILLS.get(kind)
     if skills is None:
         return ""
+    # The first block is machine-readable and versioned. Do not infer application
+    # from the existence of these documents: the Agent must return evidence.
+    metadata = {
+        "version": 2, "source": SOURCE, "revision": REVISION, "kind": kind,
+        "skills": [{"name": name,
+                    "sha256": hashlib.sha256(skill_get(name)["content"].encode("utf-8")).hexdigest()}
+                   for name in skills],
+    }
     parts = [
+        "=== LKH ENGINEERING CONTRACT v2 ===\n"
+        + json.dumps(metadata, ensure_ascii=False, sort_keys=True)
+        + "\n=== END LKH ENGINEERING CONTRACT v2 ===",
         f"Central engineering workflow for {kind}, upstream revision {REVISION}.",
         POLICY,
         "In this task the Windows Agent's sandbox, approval and allowed operation "
@@ -169,6 +244,14 @@ def agent_guidance(kind: str) -> str:
             for reference in ("tests.md", "mocking.md"):
                 parts.append(f"=== TDD reference {reference} ===\n" +
                              skill_reference("tdd", reference)["content"])
+    parts.append(
+        "Report engineering_evidence in your JSON result: revision (exact pinned revision), "
+        "applied_skills (names), skipped_skills (objects with name and reason), and "
+        "checks (objects with criterion, result=pass|fail|blocked, evidence). "
+        "Account for every selected skill and provide at least one evidence-backed check. "
+        "If an applicable procedure or verification cannot run, explain why and return passed=false. "
+        "This is self-reported evidence, not proof of executed commands; report actual commands separately. "
+        "Never claim deployment, integration or test execution on the basis of skill retrieval.")
     parts.append(POLICY)
     result = "\n\n".join(parts)
     if len(result) > _MAX_GUIDANCE:
@@ -194,5 +277,5 @@ def register_engineering_skills(mcp) -> None:
 
     @mcp.tool()
     def engineering_workflow(task_type: str) -> dict:
-        """Select feature, bugfix, verify, review, planning, architecture, or research procedure."""
+        """Select a versioned, gated delivery plan (feature/feature-small/bugfix/verify/review/planning/architecture/research)."""
         return workflow(task_type)
