@@ -64,7 +64,7 @@ class PreparationTests(unittest.TestCase):
                          "node_executable": str(self.node)},
         }
         self.runner = patch.object(verification.subprocess, "run", return_value=
-                                   subprocess.CompletedProcess([], 0, "preflight passed"))
+                                   subprocess.CompletedProcess([], 0, "preflight passed\nLKH_DEPENDENCY_CONFIGURATIONS=4\n"))
         self.run = self.runner.start()
         self.addCleanup(self.runner.stop)
 
@@ -89,7 +89,7 @@ class PreparationTests(unittest.TestCase):
         self.assertEqual(manifest["tests_executed"], 0)
         self.assertEqual(manifest["gradle"]["preflight"], "passed")
         self.assertEqual(manifest["frontend"]["preflight"], "passed")
-        self.assertEqual(self.run.call_count, 2)
+        self.assertEqual(self.run.call_count, 5)
         for call in self.run.call_args_list:
             args = call.args[0]
             self.assertEqual(args[:5], ["codex.exe", "sandbox", "--include-managed-config",
@@ -99,7 +99,8 @@ class PreparationTests(unittest.TestCase):
             self.assertNotIn("danger-full-access", args)
             self.assertFalse(any("network_access" in x for x in args))
         gradle = self.run.call_args_list[0].args[0]
-        self.assertEqual(gradle[-1], "help")
+        self.assertEqual(gradle[-1], "--version")
+        self.assertEqual(self.run.call_args_list[1].args[0][-1], "help")
         self.assertIn("--offline", gradle)
         self.assertIn("--no-daemon", gradle)
 
@@ -141,7 +142,7 @@ class PreparationTests(unittest.TestCase):
             lock["packages"]["node_modules/optional-platform"] = {"version": "1", "optional": True}
             (path / "package-lock.json").write_text(json.dumps(lock))
         self.prepare()
-        self.assertEqual(self.run.call_count, 2)
+        self.assertEqual(self.run.call_count, 5)
 
     def test_wrapper_version_mismatch_is_rejected(self):
         (self.backend / "gradle/wrapper/gradle-wrapper.properties").write_text(

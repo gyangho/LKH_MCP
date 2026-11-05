@@ -1,5 +1,7 @@
 # LKH MCP 통합 로드맵 v2.0 — Windows Installer + Phase 0–9
 
+2026-11-05 개인용 검증 환경 보완: verify·diagnose·fix 공통 준비, 실행 Java/컴파일 toolchain 분리, 오프라인 Java 의존성·프론트엔드 사전 확인, 발행 지침 자동 전달 및 로컬 환경 register/refresh 명령을 구현했다. 설정 ACL과 이전 스냅샷을 보존하며 기존 관리형 샌드박스·네트워크 정책을 유지한다. Native helper의 빌드·설치 연결 소스도 추가했으나 실제 빌드·설치·ITAM 전체 실행은 미검증이다. 상세 결과와 사용법은 [검증](VERIFICATION.md), [빌드·설정](BUILD_AND_CONFIGURATION.md)을 참조한다.
+
 2026-11-04 Agent 시작 복구: 설치본 0.0.5에서 기본 예약 작업 시작이 `0x800710E0`으로 거부되는 것을 재현했다. 등록 계정의 활성 세션을 명시한 시작으로 실제 Agent Running/heartbeat Online을 확인했다. 관리자 start/restart 소스에 같은 계정 SID·세션 선택을 추가했으며 관련 37개 테스트가 통과했다. 새 서비스 바이너리 배포 및 관리자 버튼 E2E는 별도 미검증이다. [검증 기록](VERIFICATION.md)을 참조한다.
 
 2026-11-04 검증 준비 단계: Agent 로컬에 저장소·정본 경로로 묶인 opt-in 프로필을 추가했다. 임시 worktree에 승인된 Gradle/npm 자산을 준비하고 관리 정책이 적용된 workspace 샌드박스 사전 실행이 성공해야 Codex 검증을 시작한다. 루프백 정책 자동 완화·다운로드·운영 배포는 포함하지 않는다. 실제 설치본 반영 및 대상 PC E2E는 미검증이며 [빌드·설정](BUILD_AND_CONFIGURATION.md)의 준비 절차를 따른다.

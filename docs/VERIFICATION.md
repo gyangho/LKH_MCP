@@ -1,5 +1,15 @@
 # CI 및 검증
 
+## 2026-11-05 개인용 Agent 환경 등록·갱신과 공통 준비
+
+- `verify`, `diagnose`, `fix`가 같은 로컬 환경 프로필을 선택·준비한다. Gradle 실행 Java와 선택적 `java_toolchain_homes`를 분리하고 JDK의 release/compiler 및 Gradle 실제 발견 결과를 확인한다. Gradle 버전·help·표준 Java compile/runtime/test 의존성 오프라인 resolve와 프론트엔드 의존성 시작 확인을 추가했다. 사전 확인은 컴파일·테스트 통과를 의미하지 않는다.
+- claim은 발행 지침 2종의 본문·버전·scope를 기존 guidance 문자열에 자동 첨부한다. 같은 SQLite transaction에서 읽으며 새 스키마·지침을 만들지 않는다. 미발행 문서는 명시적으로 부재를 표시하고 조회 오류·크기 초과는 lease 없이 대기시킨다. 보고서의 실제 테스트 수와 환경/컴파일/테스트 실패 상태를 보존한다.
+- 로컬 `register`, `plan`, `refresh` 명령과 Native helper 패키징 연결을 추가했다. 명시적으로 허용한 refresh만 별도 SHA worktree에서 관리형 sandbox로 의존성 resolve·testClasses·npm ci를 실행할 수 있다. 새 출력에 준비하고 모두 성공한 뒤에만 설정을 변경한다. Windows 교체는 대상 DACL을 보존하며 다른 설정·기존 자산을 유지한다. 서버 관리 저장소의 초기 등록은 `--bind-project`를 지원한다. 실제 설치본 설정은 변경하지 않았다.
+- 실제 동기 회귀: `python -m unittest tests.test_verification_environment tests.test_verification_toolchains tests.test_prepared_jobs tests.test_job_instruction_guidance tests.test_instruction_store tests.test_engineering_skills tests.test_codex_bridge.WindowsAgentTests tests.test_codex_events tests.test_codex_presence.WindowsDiagnosticsTests -q` — **75개 중 73 PASS, 2 SKIP**. SKIP은 Windows 호스트의 symlink 생성 권한 부재다. `python -m unittest tests.test_verification_assets -q` — **18 PASS**. 두 묶음 합계 **93개 중 91 PASS, 2 SKIP**. fixture TEMP/TMP는 테스트 프로세스에만 worktree 내부 경로를 지정했다.
+- 변경 Python 파일의 `compileall`, helper `--help`, build-native-suite PowerShell 구문 분석, `git diff --check` PASS. Node 의존성 smoke 일부는 실제 Node로 실행했다. Gradle/refresh subprocess 및 Windows ReplaceFileW 계약 검사는 모의 실행이므로 실제 다운로드·Gradle 컴파일·OS ACL E2E 증거가 아니다.
+- 기존 비동기 claim route 검사 묶음은 event loop 초기화에서 멈춰 중단했다. 별도 5초 제한의 `asyncio.new_event_loop()`에서도 `socket._fallback_socketpair` → `accept`에서 정지하는 것을 확인했다. 이 route 검사는 통과로 계산하지 않았으며 전체 테스트 통과로 보고하지 않는다.
+- 미실행: 사용자 담당 Native/installer 빌드, 설치·서비스 변경, 실제 ITAM Gradle·프론트엔드 전체 실행, 운영 적용. 루프백·외부 네트워크 정책을 바꾸지 않았으며 정책 차단이 있으면 별도 원인으로 남는다. [등록·갱신 사용법](BUILD_AND_CONFIGURATION.md#windows-agent-검증-환경-준비)을 참조한다.
+
 ## 2026-11-04 관리자 Agent 시작 거부 진단·복구
 
 - 설치본 0.0.5의 설치 상태는 `ready`, 고정 Agent 작업은 Enabled/Ready였지만 프로세스가 없었다. 관리자 버튼의 기본 실행 경로와 같은 스케줄러 시작을 재현했으며 최근 결과는 `0x800710E0`였다. 등록 계정 SID와 로그인 계정 SID는 같고, 현재 세션은 3이었다. AC 전원 연결 및 절약 모드 OFF를 확인했으므로 관측된 실패를 배터리 조건 때문이라고 확정하지 않았다.

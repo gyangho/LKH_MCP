@@ -44,7 +44,9 @@ Source: "..\scripts\native-upgrade-preflight.ps1"; DestDir: "{app}\scripts"; Fla
 Source: "..\scripts\install-agent-task.ps1"; DestDir: "{app}\scripts"; Flags: ignoreversion
 Source: "..\scripts\native-uninstall.ps1"; DestDir: "{app}\scripts"; Flags: ignoreversion
 Source: "..\dist\LKH-MCP-DB-Backup\*"; DestDir: "{app}\LKH-MCP-DB-Backup"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\dist\LKH-Verification-Environment\*"; DestDir: "{app}\LKH-Verification-Environment"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\windows_agent\config.example.json"; DestDir: "{commonappdata}\LKH-MCP\config"; DestName: "agent.example.json"; Flags: onlyifdoesntexist uninsneveruninstall
+Source: "..\windows_agent\verification-profile.example.json"; DestDir: "{commonappdata}\LKH-MCP\config"; Flags: onlyifdoesntexist uninsneveruninstall
 
 [InstallDelete]
 Type: files; Name: "{group}\LKH MCP Tray.lnk"

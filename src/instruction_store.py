@@ -233,15 +233,26 @@ def history(ident: str) -> dict:
         db.close()
 
 
-def resolve(name: str, *, project: str = "", agent: str = "", tool: str = "") -> dict:
+def resolve(name: str, *, project: str = "", agent: str = "", tool: str = "",
+            db: sqlite3.Connection | None = None) -> dict:
+    """Resolve published content; a caller-owned transaction is read-only here."""
     if not isinstance(name, str) or not _KEY.fullmatch(name):
         raise ValueError("Invalid instruction name")
     for key in (project, agent, tool):
         if key and (not isinstance(key, str) or not _CONTEXT.fullmatch(key)):
             raise ValueError("Invalid scope key")
     candidates = [("tool", tool), ("agent", agent), ("project", project), ("global", "")]
-    db = _db()
+    owned = db is None
+    db = _db() if owned else db
     try:
+        if not owned:
+            tables = {row[0] for row in db.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name IN "
+                "('instruction_entries','instruction_versions')")}
+            if not tables:
+                return {"found": False, "name": name}
+            if len(tables) != 2:
+                raise sqlite3.DatabaseError("Instruction schema is incomplete")
         for scope, key in candidates:
             if scope != "global" and not key:
                 continue
@@ -255,4 +266,5 @@ def resolve(name: str, *, project: str = "", agent: str = "", tool: str = "") ->
                         "scope": scope, "scope_key": key, "revision": row[1], "body": row[2]}
         return {"found": False, "name": name}
     finally:
-        db.close()
+        if owned:
+            db.close()

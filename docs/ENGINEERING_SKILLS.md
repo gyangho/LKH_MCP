@@ -32,6 +32,10 @@ Higher-priority system/user/project rules always override third-party skill text
 
 The Windows Agent claim route requires `engineering_skills_version: 1`; old Agent builds are rejected rather than silently ignoring the new guidance. The queue keeps verify/diagnose/fix jobs queued if server skills are unavailable, returning a non-secret `engineering_skills_unavailable` reason. A job claim does not imply task completion; confirm real tool execution.
 
+For all three job kinds, claim also attaches the published `lkh-mcp-usage` and `windows-gradle-verification` documents to `engineering_guidance`, including their IDs, scope, published revisions and bodies. Resolution uses the job's project, claiming Agent and `codex_enqueue` tool context with the existing tool > agent > project > global precedence. Draft edits never replace the published snapshot. An unregistered document is represented as `found: false`; lookup/schema failures or a combined payload above 50,000 characters leave the job queued with `engineering_instructions_unavailable`, without a lease or quota consumption. Resolution reuses the claim transaction and does not create instruction tables or publish/edit instructions.
+
+The Agent's local verification profile is used for verify, diagnose and fix. Queued instructions cannot choose asset paths or change sandbox/network policy. Prepared Gradle commands, toolchain metadata and preflight results are supplied in the prompt; compilers and tests must still actually run. Reports may include `status` (`completed`, `environment_blocked`, `compile_failed`, `test_failed`, `incomplete`) and actual `tests_executed`, `tests_failed`, `tests_skipped` counts. Unknown counts remain absent/null; failure statuses cannot become successful tasks. See [environment registration and refresh](BUILD_AND_CONFIGURATION.md#windows-agent-검증-환경-준비).
+
 ## Tests and user acceptance
 
 1. Run `python -m compileall -q src windows_agent tests`.

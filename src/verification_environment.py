@@ -57,11 +57,22 @@ def validate_profiles(profiles: object) -> None:
             if kind not in profile:
                 continue
             settings = profile[kind]
-            if not isinstance(settings, dict) or set(settings) != fields:
+            optional = {"java_toolchain_homes"} if kind == "gradle" else set()
+            if (not isinstance(settings, dict) or not fields <= set(settings)
+                    or set(settings) - fields - optional):
                 _fail("VERIFICATION_INVALID_PROFILE")
             _relative(settings["project_dir"])
             for key in fields - {"project_dir"}:
                 _absolute(settings[key])
+            if kind == "gradle":
+                homes = settings.get("java_toolchain_homes", [])
+                if not isinstance(homes, list) or len(homes) > 10:
+                    _fail("VERIFICATION_INVALID_JAVA_TOOLCHAINS")
+                for home in homes:
+                    _absolute(home)
+                    # Commas delimit Gradle installations; CR/LF would inject properties.
+                    if "," in home or any(ord(c) < 32 for c in home):
+                        _fail("VERIFICATION_INVALID_JAVA_TOOLCHAINS")
 
 
 def _absolute(value: object) -> Path:
@@ -127,6 +138,39 @@ def _dependency_cache(path: Path) -> None:
         if not stat.S_ISDIR(info.st_mode) or not re.fullmatch(
                 r"(?:files|metadata|resources)-\d+(?:\.\d+)*", child.name):
             _fail("VERIFICATION_DEPENDENCY_CACHE_LAYOUT_INVALID")
+
+
+def _java_version(home: Path, *, required: bool) -> str:
+    """Read approved JDK metadata without executing an outside-worktree command."""
+    try:
+        release = _checked(home / "release")
+        if release.stat().st_size > 64 * 1024:
+            _fail("VERIFICATION_JAVA_TOOLCHAIN_VERSION_INVALID")
+        match = re.search(r'^JAVA_VERSION="([0-9][0-9A-Za-z.+_-]{0,79})"$',
+                          release.read_text(encoding="utf-8"), re.M)
+        if match:
+            return match[1]
+    except OSError:
+        if not required:
+            return "unknown"
+    if required:
+        _fail("VERIFICATION_JAVA_TOOLCHAIN_VERSION_INVALID")
+    return "unknown"
+
+
+def _java_toolchains(settings: dict) -> list[dict]:
+    toolchains = []
+    for value in settings.get("java_toolchain_homes", []):
+        home = _asset(value, "JAVA_TOOLCHAIN")
+        # The Agent runs on Windows, but supporting Unix fixtures keeps validation portable.
+        for executable in ("java", "javac"):
+            found = next((home / "bin" / name for name in (executable + ".exe", executable)
+                          if (home / "bin" / name).is_file()), None)
+            if found is None:
+                _fail("VERIFICATION_JAVA_TOOLCHAIN_UNAVAILABLE")
+            _checked(found)
+        toolchains.append({"home": str(home), "version": _java_version(home, required=True)})
+    return toolchains
 
 
 class _Copier:
@@ -212,7 +256,8 @@ def _frontend_locks(project: Path, snapshot: Path) -> None:
         _checked(snapshot / name)
 
 
-def _sandbox(command: list[str], root: Path, env: dict, codex: str) -> None:
+def _sandbox(command: list[str], root: Path, env: dict, codex: str,
+             *, frontend: bool = False) -> str:
     # Built-in workspace permissions and managed requirements remain in force.
     # No network/ACL overrides, escalation or arbitrary host-side build commands.
     # npm-installed Codex may resolve to a .cmd launcher on Windows. Python's
@@ -231,7 +276,81 @@ def _sandbox(command: list[str], root: Path, env: dict, codex: str) -> None:
             _fail("VERIFICATION_LOOPBACK_DENIED: tests not run; review sandbox network policy")
         if "no cached version" in output or "not available for offline mode" in output:
             _fail("VERIFICATION_OFFLINE_DEPENDENCY_MISSING: tests not run")
+        if any(marker in output for marker in (
+                "cannot find a java installation", "no matching toolchains found",
+                "no locally installed toolchains match")):
+            _fail("VERIFICATION_JAVA_TOOLCHAIN_MISSING: tests not run")
+        if any(marker in output for marker in (
+                "unsupportedclassversionerror", "unsupported class file major version",
+                "requires jvm", "requires java", "could not determine java version")):
+            _fail("VERIFICATION_JAVA_RUNTIME_UNSUPPORTED: tests not run")
+        if frontend:
+            _fail("VERIFICATION_FRONTEND_DEPENDENCY_PREFLIGHT_FAILED: tests not run")
         _fail(f"VERIFICATION_SANDBOX_PREFLIGHT_FAILED: exit {result.returncode}; tests not run")
+    return result.stdout
+
+
+def _confirm_toolchains(output: str, configured: list[dict]) -> None:
+    """Gradle can exit successfully after ignoring an invalid/inaccessible JDK."""
+    discovered = set()
+    for block in re.split(r"(?m)^\s*\+ ", output):
+        location = re.search(r"(?m)^\s*\| Location:\s*(.+?)\s*$", block)
+        is_jdk = re.search(r"(?m)^\s*\| Is JDK:\s*true\s*$", block, re.I)
+        if location and is_jdk:
+            discovered.add(location[1].replace("\\", "/").rstrip("/").casefold())
+    if any(item["home"].replace("\\", "/").rstrip("/").casefold() not in discovered
+           for item in configured):
+        _fail("VERIFICATION_JAVA_TOOLCHAIN_NOT_DETECTED: tests not run")
+
+
+_FRONTEND_PREFLIGHT = r"""// Runs only inside the managed workspace sandbox.
+const fs = require('node:fs');
+const path = require('node:path');
+const { pathToFileURL } = require('node:url');
+(async () => {
+  const project = process.argv[2];
+  const pkg = JSON.parse(fs.readFileSync(path.join(project, 'package.json'), 'utf8'));
+  const deps = Object.assign({}, pkg.dependencies, pkg.devDependencies);
+  for (const name of Object.keys(deps)) {
+    if (!/^(?:@[a-z0-9._-]+\/)?[a-z0-9][a-z0-9._-]*$/i.test(name)) {
+      throw new Error('Unsupported dependency name');
+    }
+    if (!fs.existsSync(path.join(project, 'node_modules', name, 'package.json'))) {
+      if (pkg.optionalDependencies && name in pkg.optionalDependencies) continue;
+      throw new Error('Installed direct dependency is missing');
+    }
+  }
+  // Starting the common build libraries catches incomplete/platform-incompatible installs.
+  // Unknown build systems still get the installed dependency check; no full build runs here.
+  for (const name of ['vite', 'typescript', 'webpack', 'next']) {
+    if (!(name in deps)) continue;
+    const modulePath = require.resolve(name, {paths: [project]});
+    await import(pathToFileURL(modulePath).href);
+  }
+})().catch(() => { console.error('Frontend dependency preflight failed'); process.exitCode = 1; });
+"""
+
+
+_GRADLE_DEPENDENCY_PREFLIGHT = """// Staged by the Agent; project execution remains sandboxed/offline.
+gradle.projectsEvaluated {
+    gradle.rootProject.tasks.register('lkhVerificationDependencies') {
+        doLast {
+            def resolved = 0
+            gradle.rootProject.allprojects.each { p ->
+                ['compileClasspath', 'runtimeClasspath', 'testCompileClasspath',
+                 'testRuntimeClasspath', 'annotationProcessor', 'testAnnotationProcessor'].each { name ->
+                    def configuration = p.configurations.findByName(name)
+                    if (configuration != null && configuration.canBeResolved) {
+                        configuration.resolve()
+                        resolved++
+                    }
+                }
+            }
+            println('LKH_DEPENDENCY_CONFIGURATIONS=' + resolved)
+        }
+    }
+}
+"""
 
 
 def prepare(root: Path, profile: dict, env: dict, codex: str) -> tuple[dict, dict]:
@@ -241,6 +360,7 @@ def prepare(root: Path, profile: dict, env: dict, codex: str) -> tuple[dict, dic
     A failed preflight never proceeds to the model or reports passing tests.
     """
     try:
+        validate_profiles({"preparation": profile})
         return _prepare(root, profile, env, codex)
     except PreparationError:
         raise
@@ -274,6 +394,7 @@ def _prepare(root: Path, profile: dict, env: dict, codex: str) -> tuple[dict, di
         version = version_match[1]
         distribution = _asset(settings["distribution"], "GRADLE_DISTRIBUTION")
         java = _asset(settings["java_executable"], "JAVA", directory=False)
+        toolchains = _java_toolchains(settings)
         # Gradle 9 CLI layout. These files must match the pinned wrapper version.
         cli = f"lib/gradle-gradle-cli-main-{version}.jar"
         instrumentation = f"lib/agents/gradle-instrumentation-agent-{version}.jar"
@@ -286,13 +407,33 @@ def _prepare(root: Path, profile: dict, env: dict, codex: str) -> tuple[dict, di
         cache = _asset(settings["dependency_cache"], "DEPENDENCY_CACHE")
         _dependency_cache(cache)
         copier.copy(cache, home / "caches/modules-2", cache=True)
+        properties = ["org.gradle.java.installations.auto-download=false"]
+        if toolchains:
+            properties.extend([
+                "org.gradle.java.installations.auto-detect=false",
+                "org.gradle.java.installations.paths=" + ",".join(
+                    # Java Properties.load accepts Unicode escapes, preserving Korean paths.
+                    json.dumps(Path(item["home"]).as_posix(), ensure_ascii=True)[1:-1]
+                    for item in toolchains),
+            ])
+        (home / "gradle.properties").write_text("\n".join(properties) + "\n", encoding="utf-8")
+        dependency_check = staging / "dependency-preflight.gradle"
+        dependency_check.write_text(_GRADLE_DEPENDENCY_PREFLIGHT, encoding="utf-8")
         runtime.update(GRADLE_USER_HOME=str(home), JAVA_HOME=str(java.parent.parent))
         command = [str(java), "-Xmx64m", "-Xms64m",
                    f"-javaagent:{staging / 'gradle' / instrumentation}",
                    "-Dorg.gradle.appname=gradle", "-jar", str(staging / "gradle" / cli),
                    "--gradle-user-home", str(home), "-p", str(project),
                    "--offline", "--no-daemon", "--stacktrace", "--no-problems-report"]
-        manifest["gradle"] = {"version": version, "command": command, "preflight": "pending"}
+        manifest["gradle"] = {
+            "version": version, "command": command, "preflight": "pending",
+            "runtime_java_executable": str(java),
+            "runtime_java_version": _java_version(java.parent.parent, required=False),
+            "java_toolchains": toolchains,
+            "dependency_preflight": "pending",
+            "dependency_command": command + ["--no-configuration-cache", "--init-script",
+                                              str(dependency_check), "lkhVerificationDependencies"],
+        }
     if "frontend" in profile:
         settings = profile["frontend"]
         project = _inside(root, settings["project_dir"])
@@ -312,14 +453,30 @@ def _prepare(root: Path, profile: dict, env: dict, codex: str) -> tuple[dict, di
                        NPM_CONFIG_AUDIT="false", NPM_CONFIG_FUND="false",
                        NPM_CONFIG_UPDATE_NOTIFIER="false")
         manifest["frontend"] = {"project_dir": settings["project_dir"],
-                                "node_executable": str(node), "preflight": "pending"}
+                                "node_executable": str(node), "preflight": "pending",
+                                "dependency_preflight": "pending"}
+        frontend_check = staging / "frontend-preflight.cjs"
+        frontend_check.write_text(_FRONTEND_PREFLIGHT, encoding="utf-8")
     # Assets are fully staged before untrusted build code executes in a sandbox.
     # Do not write host-side files after preflight: build code could replace a
     # destination with a link. The completed manifest is passed in memory only.
     if "gradle" in manifest:
+        _sandbox(manifest["gradle"]["command"] + ["--version"], root, runtime, codex)
         _sandbox(manifest["gradle"]["command"] + ["help"], root, runtime, codex)
+        if manifest["gradle"]["java_toolchains"]:
+            output = _sandbox(manifest["gradle"]["command"] + ["javaToolchains"], root, runtime, codex)
+            _confirm_toolchains(output, manifest["gradle"]["java_toolchains"])
+        output = _sandbox(manifest["gradle"]["dependency_command"], root, runtime, codex)
+        count = re.search(r"(?m)^LKH_DEPENDENCY_CONFIGURATIONS=(\d+)\s*$", output)
+        if count is None:
+            _fail("VERIFICATION_DEPENDENCY_REPORT_UNAVAILABLE: tests not run")
+        manifest["gradle"]["dependency_configurations"] = int(count[1])
+        manifest["gradle"]["dependency_preflight"] = "passed" if int(count[1]) else "not_applicable"
         manifest["gradle"]["preflight"] = "passed"
     if "frontend" in manifest:
-        _sandbox([str(node), "--version"], root, runtime, codex)
+        _sandbox([str(node), "--version"], root, runtime, codex, frontend=True)
+        _sandbox([str(node), str(frontend_check), str(project)], root, runtime, codex,
+                 frontend=True)
         manifest["frontend"]["preflight"] = "passed"
+        manifest["frontend"]["dependency_preflight"] = "passed"
     return manifest, runtime
