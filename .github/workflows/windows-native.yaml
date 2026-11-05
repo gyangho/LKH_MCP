@@ -65,7 +65,7 @@ jobs:
         shell: pwsh
         run: |
           $env:PYTHONPATH = "src"
-          python -m pip install -r requirements/runtime.txt -r requirements/windows.txt
+          python -m pip install -r requirements/test.txt -r requirements/windows.txt
           python -m unittest discover -s tests -t . -p 'test_native_*.py' -v
       - name: Build unsigned native preview and check bundled assets
         shell: pwsh
@@ -215,7 +215,9 @@ jobs:
           }
           & $compiler "installer\\LKH-MCP.iss"
           if ($LASTEXITCODE -ne 0) { throw "Inno Setup compile failed" }
-          if (-not (Test-Path "dist/installer/LKH-MCP-Setup-UNSIGNED.exe")) {
+          $version = python -c "from src.version import VERSION; print(VERSION)"
+          if ($LASTEXITCODE -ne 0) { throw "Installer version unavailable" }
+          if (-not (Test-Path "dist/installer/LKH-MCP-Setup-$version-UNSIGNED.exe")) {
             throw "Installer file missing"
           }
       - name: Upload unsigned installer (staging only)

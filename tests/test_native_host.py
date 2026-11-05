@@ -13,6 +13,12 @@ from native_host_routes import compute_tray_state
 
 
 class TaskTests(unittest.TestCase):
+    def setUp(self):
+        # HTTP response tests must not read the host's installed Windows config.
+        endpoint = patch.object(tray, "_admin_base", return_value="http://127.0.0.1:8001")
+        endpoint.start()
+        self.addCleanup(endpoint.stop)
+
     def test_com_initialized_and_balanced_on_worker_thread(self):
         package, client, com = (ModuleType(name) for name in
                                 ("win32com", "win32com.client", "pythoncom"))

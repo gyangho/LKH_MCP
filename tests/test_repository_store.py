@@ -117,11 +117,20 @@ class RepositoryTests(unittest.TestCase):
                 self.assertEqual(client.get(base).status_code,401)
                 client.post("/admin/api/login",headers=headers,json={"password":"test-admin-password"})
                 self.assertEqual(client.post(base,json={"alias":"P","repository":"owner/repo"}).status_code,403)
-                self.assertEqual(client.post(base,headers=headers,json={"alias":"P","repository":"owner/repo","extra":True}).status_code,400)
-                created=client.post(base,headers=headers,json={"alias":"P","repository":"owner/repo"})
+                payload={"alias":"P", "repository":"owner/repo",
+                         "agent_id":"win-test", "local_path":"C:/repositories/repo"}
+                self.assertEqual(client.post(base,headers=headers,json={**payload,"extra":True}).status_code,400)
+                for missing in ("agent_id", "local_path"):
+                    with self.subTest(missing=missing):
+                        incomplete={key:value for key,value in payload.items() if key != missing}
+                        self.assertEqual(client.post(base,headers=headers,json=incomplete).status_code,400)
+                self.assertEqual(client.post(base,headers=headers,json={**payload,"agent_id":"","local_path":""}).status_code,400)
+                created=client.post(base,headers=headers,json=payload)
                 self.assertEqual(created.status_code,201)
+                self.assertEqual(created.json()["agent_id"],"win-test")
+                self.assertEqual(created.json()["local_path"],"C:\\repositories\\repo")
                 url=base+"/"+created.json()["id"]
-                self.assertEqual(client.put(url,headers=headers,json={"alias":"Q","repository":"owner/other","revision":1}).status_code,200)
+                self.assertEqual(client.put(url,headers=headers,json={**payload,"alias":"Q","repository":"owner/other","revision":1}).status_code,200)
                 self.assertEqual(client.request("DELETE",url,headers=headers,json={"revision":1}).status_code,409)
                 self.assertEqual(client.request("DELETE",url,headers=headers,json={"revision":2}).status_code,200)
                 self.assertEqual(client.get(base).json()["repositories"],[])

@@ -1,5 +1,11 @@
 # CI 및 검증
 
+## 2026-11-05 GitHub Actions 전체 테스트 fixture 보완
+
+- `4bc00f8`의 실제 Linux CI는 276개에서 실패 4건·오류 7건, Windows CI는 89개에서 오류 1건이었다. 새 환경 준비 테스트는 통과했으며, 실패 항목은 승인 저장소 DB fixture 누락, 빈 프로젝트 heartbeat의 오래된 기대값, 필수 Agent/경로가 없는 Repository HTTP 요청, 실제 Windows 설정에 의존한 tray fixture 및 미선언 `httpx`였다.
+- 운영 검증·인증 계약은 유지하고 해당 fixture를 현재 계약에 맞췄다. Tray HTTP 테스트는 테스트 내 고정 loopback 주소를 사용한다. `requirements/test.txt`를 Linux/Windows CI에 적용해 HTTP 클라이언트를 명시적으로 설치한다. Windows workflow의 installer 출력 확인도 현재의 버전 포함 파일명에 맞췄다.
+- 로컬 재현/검증: Native fixture 수정 전 PROGRAMDATA 없는 환경에서 동일 오류 재현, 수정 후 두 모듈 27 PASS. Presence 수정 전 실패 2건·오류 1건 재현, 수정 후 6 PASS. Repository 동기 테스트 8 PASS. HTTP/비동기 검사는 앞서 기록한 로컬 event loop 차단으로 CI에서 확인한다. Native 빌드·설치와 운영 설정은 직접 변경하지 않았다.
+
 ## 2026-11-05 개인용 Agent 환경 등록·갱신과 공통 준비
 
 - `verify`, `diagnose`, `fix`가 같은 로컬 환경 프로필을 선택·준비한다. Gradle 실행 Java와 선택적 `java_toolchain_homes`를 분리하고 JDK의 release/compiler 및 Gradle 실제 발견 결과를 확인한다. Gradle 버전·help·표준 Java compile/runtime/test 의존성 오프라인 resolve와 프론트엔드 의존성 시작 확인을 추가했다. 사전 확인은 컴파일·테스트 통과를 의미하지 않는다.

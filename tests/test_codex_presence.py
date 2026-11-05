@@ -3,6 +3,7 @@ import asyncio
 import json
 import os
 import sqlite3
+from contextlib import closing
 import sys
 import tempfile
 import unittest
@@ -25,6 +26,16 @@ class PresenceTests(unittest.TestCase):
         temp = tempfile.TemporaryDirectory()
         self.addCleanup(temp.cleanup)
         self.db = Path(temp.name) / "presence.sqlite3"
+        with closing(sqlite3.connect(self.db)) as db:
+            db.execute("""CREATE TABLE approved_repositories (
+                id TEXT PRIMARY KEY, alias TEXT NOT NULL UNIQUE,
+                repository TEXT NOT NULL, revision INTEGER NOT NULL,
+                updated_at TEXT NOT NULL, agent_id TEXT NOT NULL,
+                local_path TEXT NOT NULL)""")
+            db.execute("INSERT INTO approved_repositories VALUES(?,?,?,?,?,?,?)",
+                       ("a" * 24, "LKH_MCP", "gyangho/LKH_MCP", 1,
+                        "fixture", "win-01", "C:/repositories/LKH_MCP"))
+            db.commit()
         self.clock = [1_000_000]
         self.settings = {"CODEX_AGENT_ENABLED": True,
                          "CODEX_MAX_RUNS_PER_DAY": 30}
@@ -70,7 +81,6 @@ class PresenceTests(unittest.TestCase):
             {"agent_id": ""},
             {"projects": ["OTHER"]},
             {"projects": ["LKH_MCP", "LKH_MCP"]},
-            {"projects": []},
             {"capabilities": {**CAPS, "hostname": True}},
             {"capabilities": {**CAPS, "codex_installed": "true"}},
             {"capabilities": {"git_installed": True}},
@@ -79,6 +89,14 @@ class PresenceTests(unittest.TestCase):
             with self.subTest(values=values), self.assertRaises(ValueError):
                 self.send(**values)
         self.assertEqual(presence.agents_snapshot()["agents"], [])
+
+    def test_empty_project_list_records_available_unassigned_agent(self):
+        self.assertTrue(self.send(projects=[])["ok"])
+        agent = presence.agents_snapshot()["agents"][0]
+        self.assertTrue(agent["online"])
+        self.assertFalse(agent["busy"])
+        self.assertEqual(agent["projects"], [])
+        self.assertIsNone(agent["current_task"])
 
     def test_busy_is_based_on_server_claim_not_agent_input(self):
         self.send()
