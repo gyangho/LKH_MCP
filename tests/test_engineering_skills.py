@@ -59,6 +59,67 @@ class SkillFixtures(unittest.TestCase):
         self.assertIn("Use few mocks.", guidance)
         self.assertIn("temporary worktree", guidance)
 
+    def test_feature_delivery_phases_have_explicit_evidence_gates(self):
+        plan = skills.workflow("feature")
+        self.assertEqual(plan["revision"], skills.REVISION)
+        self.assertEqual(plan["steps"],
+                         ["domain-modeling", "to-spec", "to-tickets",
+                          "implement-spec", "code-review"])
+        self.assertEqual([p["phase"] for p in plan["phases"]],
+                         ["discover", "specify", "implement", "review", "verify"])
+        self.assertTrue(all(p["gate"] for p in plan["phases"]))
+        self.assertEqual(set(plan["completion_gates"]), {"code", "integration", "tests", "production"})
+        self.assertEqual(skills.workflow("feature-small")["steps"],
+                         ["domain-modeling", "tdd", "implement", "code-review"])
+        self.assertIn("diagnosing-bugs", skills.workflow("bugfix")["steps"])
+        self.assertNotIn("implement-spec", skills.workflow("verify")["steps"])
+        self.assertRaises(ValueError, skills.workflow, "nonexistent")
+
+    def test_v2_contract_requires_complete_agent_evidence(self):
+        from windows_agent import agent
+        folder = tempfile.TemporaryDirectory()
+        self.addCleanup(folder.cleanup)
+        root = Path(folder.name)
+        guidance = skills.agent_guidance("verify")
+        contract = agent._engineering_contract(guidance)
+        self.assertEqual(contract["version"], 2)
+        self.assertEqual(contract["skills"][0]["name"], "tdd")
+        self.assertEqual(len(contract["skills"][0]["sha256"]), 64)
+
+        def fake_worktree(repo, sha, temp):
+            temp.mkdir(parents=True)
+
+        def run_response(payload):
+            with patch.object(agent, "_make_worktree", side_effect=fake_worktree), \
+                 patch.object(agent, "_remove_worktree"), \
+                 patch.object(agent, "_codex", return_value=json.dumps(payload)):
+                return agent.codex_task(root, "a"*40, "verify", "Run actual tests",
+                                        workflow_guidance=guidance)
+
+        base = {"passed": True, "status": "completed", "summary": "ok",
+                "commands": ["python -m unittest"], "failures": [],
+                "tests_executed": 1, "tests_failed": 0, "tests_skipped": 0}
+        passed, report = run_response(base)
+        self.assertFalse(passed)
+        self.assertEqual(json.loads(report)["status"], "incomplete")
+        good = dict(base, engineering_evidence={
+            "revision": skills.REVISION, "applied_skills": ["tdd"],
+            "skipped_skills": [],
+            "checks": [{"criterion": "Regression behavior",
+                        "result": "pass", "evidence": "1 test passed"}],
+        })
+        passed, report = run_response(good)
+        self.assertTrue(passed)
+        self.assertEqual(json.loads(report)["engineering_evidence_status"], "agent_reported")
+        wrong = dict(good, engineering_evidence=dict(good["engineering_evidence"], revision="0"*40))
+        self.assertFalse(run_response(wrong)[0])
+        blocked = dict(good, engineering_evidence=dict(good["engineering_evidence"],
+            checks=[{"criterion": "Integration", "result": "blocked", "evidence": "No test host"}]))
+        self.assertFalse(run_response(blocked)[0])
+        with self.assertRaises(ValueError):
+            agent.codex_task(root, "a"*40, "diagnose", "No action",
+                             workflow_guidance=guidance)
+
     def test_reference_restricts_paths_and_symlinks(self):
         self.assertIn("Test visible behavior.", skills.skill_reference("tdd", "tests.md")["content"])
         for name in ("../LICENSE", "x/../../LICENSE", "/etc/passwd",
