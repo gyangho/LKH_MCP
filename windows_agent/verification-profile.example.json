@@ -1,0 +1,16 @@
+{
+  "repository": "gyangho/ITAM",
+  "path": "C:/Users/User/Desktop/이경호/개발/ITAM",
+  "gradle": {
+    "project_dir": "spring-itam-server",
+    "distribution": "C:/approved-assets/gradle-9.5.1",
+    "dependency_cache": "C:/approved-assets/itam-initial/modules-2",
+    "java_executable": "C:/Program Files/Java/jdk-26.0.1/bin/java.exe",
+    "java_toolchain_homes": ["C:/Program Files/Java/jdk-17"]
+  },
+  "frontend": {
+    "project_dir": "itam-frontend",
+    "snapshot": "C:/approved-assets/itam-initial/frontend",
+    "node_executable": "C:/Program Files/nodejs/node.exe"
+  }
+}

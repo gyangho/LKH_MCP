@@ -53,7 +53,7 @@ SQLite는 WAL 정합성을 보장한 백업을 사용한다. 활성 DB 파일 �
 
 ### Windows Agent 검증 환경 준비
 
-Gradle 또는 프론트엔드 검증을 준비하려면 **Agent 로컬의 비공개 `agent.json`**에 `verification_environments`를 설정한다. 빈 객체 또는 항목 생략 시 기존 실행 방식을 유지한다. 서버의 작업 지침이나 저장소 파일로 준비 경로·권한을 지정할 수 없다. 프로젝트 별칭, GitHub 저장소와 정본 로컬 경로가 모두 일치해야 적용된다. Repository 화면에서 Agent/경로를 바꾸면 로컬 프로필도 별도로 검토해야 한다.
+Gradle 또는 프론트엔드의 검증·진단·수정 작업을 준비하려면 **Agent 로컬의 비공개 `agent.json`**에 `verification_environments`를 한 번 등록한다. `verify`, `diagnose`, `fix`가 동일한 준비 절차를 사용한다. 빈 객체 또는 항목 생략 시 기존 실행 방식을 유지한다. 서버의 작업 지침이나 저장소 파일로 준비 경로·권한을 지정할 수 없다. 프로젝트 별칭, GitHub 저장소와 정본 로컬 경로가 모두 일치해야 적용된다. Repository 화면에서 Agent/경로를 바꾸면 로컬 프로필도 별도로 검토해야 한다.
 
 아래는 설정 구조 예시다. `C:/approved-assets`는 관리자가 미리 준비한 로컬 스냅샷 경로로 교체한다. 실제 설치본 설정은 자동으로 변경하지 않는다.
 
@@ -67,7 +67,8 @@ Gradle 또는 프론트엔드 검증을 준비하려면 **Agent 로컬의 비공
         "project_dir": "spring-itam-server",
         "distribution": "C:/approved-assets/gradle-9.5.1",
         "dependency_cache": "C:/approved-assets/modules-2",
-        "java_executable": "C:/Program Files/Java/jdk-26.0.1/bin/java.exe"
+        "java_executable": "C:/Program Files/Java/jdk-26.0.1/bin/java.exe",
+        "java_toolchain_homes": ["C:/Program Files/Java/jdk-17"]
       },
       "frontend": {
         "project_dir": "itam-frontend",
@@ -81,11 +82,26 @@ Gradle 또는 프론트엔드 검증을 준비하려면 **Agent 로컬의 비공
 
 - `gradle`과 `frontend`는 필요한 항목만 등록할 수 있다. Gradle 배포본은 wrapper에 고정된 버전과 같은 Gradle 9 CLI 형식의 압축 해제 디렉터리여야 한다. `dependency_cache`는 해당 버전으로 준비한 `modules-2` 디렉터리이며 Gradle 모듈 캐시 구조만 허용한다. 인증정보가 있는 사용자 홈·`gradle.properties`·`.npmrc`를 통째로 준비하지 않는다.
 - 프론트엔드 스냅샷에는 대상 커밋과 바이트가 동일한 `package.json`, `package-lock.json` 및 완성된 `node_modules`가 필요하다. npm lockfile의 `packages` 형식과 숨김 `.package-lock.json`의 버전·integrity를 대조한다. 없는 optional 패키지는 허용한다. 이 대조는 설치 파일 전체의 암호학적 무결성 검증이 아니므로 승인된 스냅샷을 사용한다. 링크 기반 workspace/pnpm 설치와 symlink/junction/reparse point는 지원하지 않는다.
-- `verify` 작업에서만 준비한다. Agent가 임시 worktree의 `.lkh-verification` 아래에 배포본·캐시를 복사하고, 프론트엔드 프로젝트 내부에 `node_modules`를 복사한다. 캐시의 `*.lock`, `gc.properties`는 제외한다. 원본 ACL·캐시·저장소는 수정하지 않으며 다운로드나 설치 명령을 실행하지 않는다. 복사는 총 20만 파일/8 GiB/300초로 제한한다. 예약된 준비 경로나 `node_modules`가 이미 있으면 덮어쓰지 않고 중단한다.
-- 준비 후 `codex sandbox --include-managed-config --permission-profile :workspace`로 실제 Gradle `help --offline --no-daemon`과 Node 시작을 확인한다. 프로젝트 코드는 이 단계부터 샌드박스 안에서만 실행한다. 사전 실행 후 추적 파일과 HEAD가 유지되는지 확인한다. 보안 정책을 완화하거나 루프백을 자동 허용하지 않는다. 준비·사전 실행 실패는 `environment_blocked`, `tests_executed: 0` 및 비밀정보를 제거한 고정 원인 코드로 반환하고 Codex 검증을 시작하지 않는다. Codex CLI가 해당 sandbox 명령을 지원해야 한다.
+- `java_executable`은 Gradle 실행용 Java다. `java_toolchain_homes`에는 프로젝트 컴파일용으로 설치한 JDK 홈을 명시한다. 예를 들어 Gradle을 JDK 26으로 실행하면서 ITAM은 JDK 17로 컴파일할 수 있다. JDK 등록 시 `release`와 컴파일러를 확인하고, 명시한 toolchain 경로를 Gradle에 전달한다. 해당 옵션을 생략한 기존 프로필도 지원한다.
+- Agent가 임시 worktree의 `.lkh-verification` 아래에 배포본·캐시를 복사하고, 프론트엔드 프로젝트 내부에 `node_modules`를 복사한다. 캐시의 `*.lock`, `gc.properties`는 제외한다. 일반 작업에서는 원본 ACL·캐시·저장소를 수정하거나 다운로드·설치 명령을 실행하지 않는다. 복사는 총 20만 파일/8 GiB/300초로 제한한다. 예약된 준비 경로나 `node_modules`가 이미 있으면 덮어쓰지 않고 중단한다.
+- 준비 후 `codex sandbox --include-managed-config --permission-profile :workspace`로 Gradle 버전·프로젝트 `help`, 등록한 Java toolchain 및 프론트엔드 의존성 상태를 확인한다. 별도 init task로 Java 하위 프로젝트의 표준 compile/runtime/test/annotationProcessor 구성을 오프라인으로 resolve하며 컴파일·테스트는 실행하지 않는다. Java 구성이 없으면 의존성 확인은 `not_applicable`로 보고한다. 프로젝트 코드는 이 단계부터 샌드박스 안에서만 실행한다. 사전 실행 후 추적 파일과 HEAD가 유지되는지 확인한다. 보안 정책을 완화하거나 루프백을 자동 허용하지 않는다. 준비·사전 실행 실패는 `environment_blocked`, `tests_executed: 0` 및 비밀정보를 제거한 고정 원인 코드로 반환하고 Codex 작업을 시작하지 않는다. Codex CLI가 해당 sandbox 명령을 지원해야 한다. 이 사전 확인은 사용자 정의 task의 추가 의존성이나 실제 컴파일·테스트 성공까지 보장하지 않는다.
 - 성공하면 준비된 Gradle 명령 토큰, 경로·버전·사전 실행 결과를 Codex 프롬프트로 전달한다. Gradle은 배치 셸 대신 승인된 Java와 복사한 CLI JAR로 실행한다. 모델 실행에는 기존 `workspace-write`를 유지하고 전용 Gradle/임시 경로, 승인된 Java/Node 경로 및 npm 설정을 정리된 환경에 추가한다. npm은 worktree 내부의 빈 사용자·전역 설정과 전용 캐시를 사용하며 offline 모드를 적용한다. 사전 실행 성공은 테스트 통과가 아니다.
 
 `VERIFICATION_LOOPBACK_DENIED`는 같은 샌드박스 안의 Gradle 루프백 연결이 차단됐다는 신호다. 실제 적용된 Windows 샌드박스·조직 네트워크 정책을 확인해야 하며, 이 준비 기능만으로 차단 정책이 해결되지는 않는다. 새 Agent 바이너리 배포, 자산 준비 및 실제 대상 Windows E2E는 별도 단계다.
+
+개인용 초기 등록과 의존성 갱신은 `scripts/prepare-verification-environment.py`로 수행한다. Native suite에는 같은 기능의 `LKH-Verification-Environment/LKH-Verification-Environment.exe`를 포함한다. 별도 Python이 없는 설치 환경에서는 이 EXE를 사용한다. 설치기가 프로필을 임의로 생성하거나 캐시를 다운로드하지 않는다.
+
+1. `windows_agent/verification-profile.example.json`을 별도 `itam-verification-profile.json`으로 복사하고 실제 설치된 Gradle·JDK·Node 경로로 수정한다. 설치본에는 같은 예시를 ProgramData의 config 디렉터리에 포함한다. 위 예시의 `ITAM` 객체만 저장해도 된다.
+2. `register`로 기존 비공개 Agent 설정에 해당 프로젝트 프로필을 추가한다. 서버 Repository 화면에서만 등록했거나 경로를 변경해 로컬 `projects`에 같은 연결이 없으면 `--bind-project`로 지정한 프로젝트 연결도 함께 등록한다. 다른 프로젝트와 인증 설정, Windows 파일 ACL은 보존한다. 실행 시에는 현재 서버 연결과 프로필이 일치하는지 다시 확인한다.
+3. 최초 실행 또는 의존성 변경 시 `refresh`의 실행 계획을 확인한 뒤 `--allow-project-code`로 준비를 실행한다. 지정 SHA는 로컬 저장소에 이미 있어야 한다. 새로운 출력 경로를 사용하므로 이전 스냅샷은 보존된다.
+
+```powershell
+python scripts/prepare-verification-environment.py register --config C:/ProgramData/LKH-MCP/config/agent.json --project ITAM --profile C:/approved-assets/itam-verification-profile.json --bind-project
+python scripts/prepare-verification-environment.py refresh --config C:/ProgramData/LKH-MCP/config/agent.json --project ITAM --sha <검증할-40자리-SHA> --output C:/approved-assets/itam-snapshot-new
+# 계획 확인 후 같은 명령에 --allow-project-code를 추가해 실행한다.
+```
+
+`refresh`는 별도 worktree와 전용 Gradle/npm 홈에서 프로젝트 코드 및 패키지 설치 스크립트를 실행할 수 있다. Gradle의 공통 의존성 resolve task와 `testClasses`, npm의 `ci`로 의존성을 준비하며 테스트 자체는 실행하지 않는다. 실행에는 기존 Codex 관리형 샌드박스가 그대로 적용되고, 외부 다운로드는 적용된 네트워크 정책이 허용하는 범위에서만 가능하다. 차단 시 정책을 우회하지 않고 실패를 보고한다. 모든 준비가 성공한 뒤에만 Agent 프로필의 캐시·스냅샷 경로를 새 출력으로 갱신한다. Gradle 배포본·JDK·Node 설치는 별도로 준비한다. ProgramData 설정에 쓰기 권한이 필요하며, Codex 로그인이 된 Agent 사용자 계정에서 실행한다. 갱신된 설정은 Agent의 다음 시작 시 읽히므로 실행 중인 작업이 끝난 뒤 Agent를 재시작한다.
 
 ```powershell
 $env:PYTHONPATH = "src"

@@ -28,10 +28,27 @@ _RETENTION = 30 * 86400
 _LEASE = 60 * 60
 _MAX_GRAPH_COMPRESSED = 4_000_000
 _MAX_GRAPH_JSON = 32_000_000
+_MAX_ENGINEERING_GUIDANCE = 50000
+_JOB_INSTRUCTIONS = ("lkh-mcp-usage", "windows-gradle-verification")
 
 
 def _now() -> int:
     return int(time.time())
+
+
+def _published_job_guidance(guidance: str, project: str, agent_id: str,
+                            conn: sqlite3.Connection) -> str:
+    """Attach the published snapshot in the same transaction that leases the job."""
+    import instruction_store
+    parts = [guidance, "Published job instructions (reference data; existing authorization and sandbox rules still apply):"]
+    for name in _JOB_INSTRUCTIONS:
+        document = instruction_store.resolve(name, project=project, agent=agent_id,
+                                             tool="codex_enqueue", db=conn)
+        parts.append(json.dumps(document, ensure_ascii=False))
+    result = "\n\n".join(parts)
+    if len(result) > _MAX_ENGINEERING_GUIDANCE:
+        raise ValueError("Combined engineering guidance exceeds agent payload limit")
+    return result
 
 
 def _allowed(db=None) -> dict[str, str]:
@@ -234,6 +251,12 @@ def claim(agent_id: str, projects: list[str]) -> dict:
                 # Fail closed. No lease or quota consumed, and the job remains queued.
                 conn.execute("COMMIT")
                 return {"job": None, "reason": "engineering_skills_unavailable"}
+            try:
+                job["engineering_guidance"] = _published_job_guidance(
+                    job["engineering_guidance"], job["project"], agent_id, conn)
+            except (OSError, ValueError, RuntimeError, sqlite3.DatabaseError):
+                conn.execute("COMMIT")
+                return {"job": None, "reason": "engineering_instructions_unavailable"}
         lease = secrets.token_urlsafe(32)
         conn.execute("""UPDATE codex_agent_jobs SET state='running',claimed_at=?,agent_id=?,lease_token_hash=?
                         WHERE id=? AND state='queued'""",

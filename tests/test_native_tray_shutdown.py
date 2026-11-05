@@ -9,6 +9,12 @@ import native_tray as tray
 
 
 class TrayShutdownTests(unittest.TestCase):
+    def setUp(self):
+        # Shutdown/HTTP fixtures use a fixed endpoint on every test platform.
+        endpoint = patch.object(tray, "_admin_base", return_value="http://127.0.0.1:8001")
+        endpoint.start()
+        self.addCleanup(endpoint.stop)
+
     def test_progress_reports_agent_uac_and_service_wait_in_order(self):
         progress = []
         with patch.object(tray, "_read_state", return_value={"state": "online", "busy": False}), \

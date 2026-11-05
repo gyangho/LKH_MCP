@@ -34,10 +34,14 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "Admin bootstrap build failed" }
     & $Python -m PyInstaller @base --console --name LKH-MCP-DB-Backup src/native_uninstall_backup.py
     if ($LASTEXITCODE -ne 0) { throw "SQLite recovery helper build failed" }
+    & $Python -m PyInstaller @base --console --name LKH-Verification-Environment `
+        scripts/prepare-verification-environment.py
+    if ($LASTEXITCODE -ne 0) { throw "Verification environment helper build failed" }
     & $Python scripts/prepare-skill-runtime.py
     if ($LASTEXITCODE -ne 0) { throw "Skill Python runtime preparation failed" }
     foreach ($name in @("LKH-MCP-Admin-Setup", "LKH-MCP-Server", "LKH-MCP-Service", "LKH-MCP-Tray",
-                         "LKH-Codex-Agent", "LKH-MCP-Enroll", "LKH-MCP-DB-Backup")) {
+                         "LKH-Codex-Agent", "LKH-MCP-Enroll", "LKH-MCP-DB-Backup",
+                         "LKH-Verification-Environment")) {
         if (-not (Test-Path "dist\$name\$name.exe")) {
             throw "Missing unsigned bundle: $name"
         }
